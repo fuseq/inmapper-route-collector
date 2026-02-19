@@ -1,0 +1,55 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+.cursor/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Gereksiz proje dosyaları (deploy'a dahil değil)
+ar_direction_demo/
+svg_validator/
+IST/
+human_annotation_all_floors/
+nlp_training_data/
+routes/
+routes_multi/
+
+# Diğer venue SVG'leri (sadece zorlu gerekli)
+files/floors/ankarasehir/
+files/floors/AYT/
+files/floors/IST33/
+files/floors/New folder/
+files/floors/New folder (2)/
+files/floors/test/
+files/supportive/portals_ankarasehir.json
+
+# Büyük / gereksiz dosyalar
+*.xlsx
+*.pdf
+*.docx
+AGY100.docx.pdf
+
+# Oluşturulan dosyalar
+route_visualization_*.svg
+zigzag_analysis_*.svg
+route_viewer.html
+test_route*.json
+route_metric.json
+route_sample_all_floors.json
+
+# Test / debug dosyaları
+test_anchor.py
+check_*.py
+turn_code.py
+main.py
+BATCH_ROUTES_README.md

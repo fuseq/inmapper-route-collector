@@ -1,0 +1,56 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.idea/
+.vscode/
+.cursor/
+
+# Git
+.git/
+.gitignore
+
+# Gereksiz dosyalar (deploy'a dahil etme)
+ar_direction_demo/
+svg_validator/
+IST/
+human_annotation_all_floors/
+nlp_training_data/
+routes/
+routes_multi/
+
+# Test / debug dosyaları
+test_*.json
+test_*.py
+check_*.py
+turn_code.py
+main.py
+
+# Oluşturulan SVG/visualization dosyaları
+route_visualization_*.svg
+zigzag_analysis_*.svg
+route_viewer.html
+
+# Büyük dosyalar
+*.xlsx
+*.pdf
+*.docx
+*.exe
+
+# Batch route readme
+BATCH_ROUTES_README.md
+
+# Ankarasehir ve diğer venue SVG'leri (sadece zorlu gerekli)
+files/floors/ankarasehir/
+files/floors/AYT/
+files/floors/IST33/
+files/floors/New folder/
+files/floors/New folder (2)/
+files/floors/test/
+files/supportive/portals_ankarasehir.json
+
+
