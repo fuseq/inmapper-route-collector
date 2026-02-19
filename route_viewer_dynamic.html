@@ -863,36 +863,51 @@
         }
 
         // ─── SUBMIT ───
-        function submitDescriptions() {
+        async function submitDescriptions() {
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+
             const result = {
                 venue: 'zorlu',
                 start_room: currentRoute.start,
                 end_room: currentRoute.end,
                 floor: currentRoute.floor,
                 timestamp: new Date().toISOString(),
-                routes: {}
+                steps: currentSteps.map(step => ({
+                    step_number: step.step_number,
+                    action: step.action,
+                    distance_meters: step.distance_meters,
+                    landmark: step.landmark,
+                    system_description: step.description,
+                    human_description: (userDescriptions[step.step_number] || '').trim()
+                }))
             };
 
-            result.routes['shortest'] = currentSteps.map(step => ({
-                step_number: step.step_number,
-                action: step.action,
-                distance_meters: step.distance_meters,
-                landmark: step.landmark,
-                system_description: step.description,
-                human_description: (userDescriptions[step.step_number] || '').trim()
-            }));
+            try {
+                const resp = await fetch('/api/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(result)
+                });
 
-            const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
+                const data = await resp.json();
 
-            const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '_');
-            a.download = `tarif_${timestamp}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-
-            showToast('JSON dosyası indirildi ✓', 'success');
+                if (resp.ok) {
+                    showToast('Descriptions submitted successfully', 'success');
+                    // Formu sıfırla
+                    userDescriptions = {};
+                    document.querySelectorAll('.desc-textarea').forEach(ta => ta.value = '');
+                    updateProgress();
+                } else {
+                    showToast('Error: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (err) {
+                showToast('Connection error: ' + err.message, 'error');
+            } finally {
+                btn.textContent = 'Submit';
+                updateProgress();
+            }
         }
 
         // ─── TOAST ───

@@ -11,6 +11,7 @@ from flask_cors import CORS
 import json
 import os
 import xml.etree.ElementTree as ET
+import urllib.request
 
 from helpers.dijkstra import dijkstra_connections
 from helpers.extract_xml import build_graph, get_room_areas
@@ -287,6 +288,112 @@ def calculate_route():
             'end': f"{end_room['type']} - {end_room['id']}",
             'floor': start_floor
         })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# ─── Google Sheets'e veri gönder ───
+GOOGLE_SHEETS_URL = os.environ.get('GOOGLE_SHEETS_URL', '')
+
+
+def _format_step_line(step):
+    """Tek bir step'i metrik formatta satıra çevir"""
+    num = step.get('step_number', 0)
+    action = step.get('action', '').upper()
+    dist = step.get('distance_meters', 0)
+    landmark = step.get('landmark', '')
+    desc = step.get('system_description', '')
+
+    # "3. TURN_LEFT    11.2m [Food - ID017]       | Sola sonra ..."
+    action_str = f"{action:<13}"
+    dist_str = f"{dist:.1f}m"
+
+    if landmark:
+        ref_str = f" [{landmark}]"
+    else:
+        ref_str = ""
+
+    return f"{num}. {action_str} {dist_str}{ref_str}  |  {desc}"
+
+
+def _build_sheet_row(data):
+    """Frontend verisini tek bir Google Sheets satırına dönüştür"""
+    start_room = data.get('start_room', '')
+    end_room = data.get('end_room', '')
+    floor = data.get('floor', '0')
+    venue = data.get('venue', 'zorlu')
+    steps = data.get('steps', [])
+
+    # ID: "Kat 0_Food_ID007_to_Kat 0_Shop_ID005"
+    start_compact = start_room.replace(' - ', '_').replace(' ', '_')
+    end_compact = end_room.replace(' - ', '_').replace(' ', '_')
+    row_id = f"Kat {floor}_{start_compact}_to_Kat {floor}_{end_compact}"
+
+    # Metric Steps: her step tam formatlı satır
+    metric_lines = []
+    for step in steps:
+        metric_lines.append(_format_step_line(step))
+    metric_text = "\n".join(metric_lines)
+
+    # Human Steps: her step numaralı kullanıcı tarifi
+    human_lines = []
+    for step in steps:
+        num = step.get('step_number', 0)
+        human_desc = step.get('human_description', '').strip()
+        human_lines.append(f"{num}. {human_desc}")
+    human_text = "\n".join(human_lines)
+
+    return {
+        'id': row_id,
+        'venue': venue,
+        'start_room': start_room,
+        'end_room': end_room,
+        'floor': f"Kat {floor}",
+        'metric_steps': metric_text,
+        'human_steps': human_text,
+        'timestamp': data.get('timestamp', ''),
+        'step_count': len(steps)
+    }
+
+
+@app.route('/api/submit', methods=['POST'])
+def submit_descriptions():
+    """Kullanıcı tariflerini Google Sheets'e gönder"""
+    try:
+        data = request.get_json(force=True, silent=True)
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Veriyi sheet formatına çevir
+        sheet_row = _build_sheet_row(data)
+        print(f"[SUBMIT] ID: {sheet_row['id']}, steps: {sheet_row['step_count']}", flush=True)
+
+        if not GOOGLE_SHEETS_URL:
+            print("[SUBMIT] GOOGLE_SHEETS_URL not configured, saving locally", flush=True)
+            os.makedirs('submissions', exist_ok=True)
+            ts = data.get('timestamp', '').replace(':', '-').replace('T', '_')[:19]
+            fname = f"submissions/tarif_{ts}.json"
+            with open(fname, 'w', encoding='utf-8') as f:
+                json.dump(sheet_row, f, ensure_ascii=False, indent=2)
+            return jsonify({'status': 'saved_locally', 'file': fname})
+
+        # Google Apps Script'e POST et
+        payload = json.dumps(sheet_row).encode('utf-8')
+        req = urllib.request.Request(
+            GOOGLE_SHEETS_URL,
+            data=payload,
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read().decode('utf-8'))
+
+        print(f"[SUBMIT] Google Sheets OK: {result}", flush=True)
+        return jsonify({'status': 'ok', 'sheet_result': result})
 
     except Exception as e:
         import traceback
