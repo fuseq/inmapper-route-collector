@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -86,11 +86,11 @@
         .room-select.end { border-color: #dc3545; }
 
         .calc-btn {
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: #4a5568;
             color: white;
             border: none;
             padding: 6px 18px;
-            border-radius: 8px;
+            border-radius: 6px;
             font-size: 13px;
             font-weight: 600;
             cursor: pointer;
@@ -98,8 +98,8 @@
             white-space: nowrap;
         }
 
-        .calc-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102,126,234,0.3); }
-        .calc-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+        .calc-btn:hover { background: #2d3748; }
+        .calc-btn:disabled { background: #ccc; cursor: not-allowed; }
 
         .route-info {
             font-size: 12px;
@@ -514,6 +514,243 @@
         .toast.show { transform: translateX(-50%) translateY(0); }
         .toast.success { background: #28a745; }
         .toast.error { background: #dc3545; }
+
+        /* ─── TAB SWITCHER (mobile only) ─── */
+        .tab-switcher {
+            display: none;
+        }
+
+        .tab-switcher button {
+            flex: 1;
+            padding: 10px 0;
+            border: none;
+            background: #f0f2f5;
+            font-size: 14px;
+            font-weight: 600;
+            color: #888;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .tab-switcher button.active {
+            color: #667eea;
+            background: white;
+        }
+
+        .tab-switcher button.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 20%;
+            right: 20%;
+            height: 3px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 3px 3px 0 0;
+        }
+
+        /* ─── MOBILE RESPONSIVE ─── */
+        @media (max-width: 768px) {
+            body {
+                height: auto;
+                overflow: auto;
+            }
+
+            .app-container {
+                height: auto;
+                min-height: 100vh;
+            }
+
+            /* Header: vertical stack */
+            .header {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 12px 14px;
+                gap: 8px;
+            }
+
+            .title {
+                font-size: 16px;
+                justify-content: center;
+            }
+
+            .room-selector-group {
+                display: grid;
+                grid-template-columns: auto 1fr 2fr;
+                gap: 6px;
+                align-items: center;
+            }
+
+            .room-selector-group label {
+                font-size: 13px;
+                min-width: 70px;
+            }
+
+            .room-select {
+                width: 100%;
+                font-size: 14px;
+                padding: 8px 10px;
+            }
+
+            .calc-btn {
+                width: 100%;
+                padding: 12px;
+                font-size: 15px;
+                border-radius: 10px;
+            }
+
+            .route-info {
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: 8px;
+                font-size: 13px;
+            }
+
+            /* Tab switcher visible on mobile */
+            .tab-switcher {
+                display: flex;
+                border-bottom: 1px solid #e0e0e0;
+                flex-shrink: 0;
+            }
+
+            /* Main content: vertical stack with tabs */
+            .main-content {
+                flex-direction: column;
+                gap: 0;
+                padding: 0;
+                flex: 1;
+            }
+
+            .map-panel {
+                border-radius: 0;
+                box-shadow: none;
+                min-height: 50vh;
+                height: 50vh;
+                flex: none;
+            }
+
+            .map-panel.hidden-tab {
+                display: none !important;
+            }
+
+            .steps-panel {
+                border-radius: 0;
+                box-shadow: none;
+                flex: none;
+                display: none; /* hidden by default on mobile (map tab first) */
+            }
+
+            .steps-panel.hidden-tab {
+                display: none !important;
+            }
+
+            /* Full screen for active tab */
+            .map-panel.active-tab {
+                display: block;
+                flex: 1;
+                height: auto;
+                min-height: calc(100vh - 200px);
+            }
+
+            .steps-panel.active-tab {
+                display: flex;
+                flex: 1;
+                height: auto;
+                min-height: calc(100vh - 200px);
+            }
+
+            .steps-list {
+                max-height: none;
+                overflow-y: visible;
+            }
+
+            /* Zoom controls */
+            .zoom-controls {
+                bottom: 12px;
+                right: 12px;
+            }
+
+            .zoom-btn {
+                width: 40px;
+                height: 40px;
+                font-size: 20px;
+            }
+
+            /* Floor nav */
+            .floor-nav {
+                right: auto;
+                left: 50%;
+                transform: translateX(-50%);
+                top: 10px;
+            }
+
+            .floor-nav-btn {
+                width: 36px;
+                height: 36px;
+                font-size: 16px;
+            }
+
+            /* Step cards */
+            .step-card {
+                padding: 12px;
+                margin-bottom: 10px;
+            }
+
+            .step-textarea {
+                font-size: 16px; /* prevents iOS zoom on focus */
+                min-height: 50px;
+            }
+
+            .step-system-desc {
+                font-size: 11px;
+                padding: 6px 8px;
+            }
+
+            /* Submit footer */
+            .steps-footer {
+                padding: 12px 14px;
+                position: sticky;
+                bottom: 0;
+                background: white;
+                z-index: 50;
+            }
+
+            .submit-btn {
+                padding: 14px;
+                font-size: 16px;
+            }
+
+            /* Toast */
+            .toast {
+                bottom: 80px;
+                font-size: 13px;
+                padding: 12px 20px;
+            }
+
+            /* Map overlay */
+            .map-overlay {
+                top: 8px;
+                left: 8px;
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+        }
+
+        /* Small phones */
+        @media (max-width: 380px) {
+            .room-selector-group {
+                grid-template-columns: 1fr 1fr;
+                gap: 4px;
+            }
+
+            .room-selector-group label {
+                grid-column: 1 / -1;
+            }
+
+            .title {
+                font-size: 14px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -525,32 +762,38 @@
             </div>
 
             <div class="room-selector-group">
-                <label>Başlangıç:</label>
+                <label>Start:</label>
                 <select class="room-select" id="startFloorSelect" onchange="onStartFloorChange()"></select>
                 <select class="room-select start" id="startSelect"></select>
             </div>
 
             <div class="room-selector-group">
-                <label>Hedef:</label>
+                <label>Destination:</label>
                 <select class="room-select" id="endFloorSelect" onchange="onEndFloorChange()"></select>
                 <select class="room-select end" id="endSelect"></select>
             </div>
 
             <button class="calc-btn" id="calcBtn" onclick="calculateRoute()">
-                Hesapla
+                Calculate
             </button>
 
             <div class="route-info" id="routeInfo" style="display: none;">
-                <span>Mesafe: <strong id="distInfo">-</strong></span>
-                <span>Dönüş: <strong id="turnInfo">-</strong></span>
+                <span>Distance: <strong id="distInfo">-</strong></span>
+                <span>Turns: <strong id="turnInfo">-</strong></span>
                 <span id="floorChangeInfo" style="display: none;"></span>
             </div>
+        </div>
+
+        <!-- TAB SWITCHER (mobile only) -->
+        <div class="tab-switcher" id="tabSwitcher">
+            <button class="active" id="tabMap" onclick="switchTab('map')">🗺️ Map</button>
+            <button id="tabSteps" onclick="switchTab('steps')">📝 Steps</button>
         </div>
 
         <!-- MAIN -->
         <div class="main-content">
             <!-- MAP -->
-            <div class="map-panel">
+            <div class="map-panel active-tab" id="mapPanel">
                 <div class="map-overlay" id="mapOverlay">
                     Zoom: <strong id="zoomLevel">100%</strong>
                 </div>
@@ -571,12 +814,12 @@
 
                 <div class="loading-overlay" id="loadingOverlay">
                     <div class="spinner"></div>
-                    Rota hesaplanıyor...
+                    Calculating route...
                 </div>
             </div>
 
             <!-- STEPS -->
-            <div class="steps-panel">
+            <div class="steps-panel" id="stepsPanel">
                 <div class="steps-header">
                     <div class="steps-title">Step Descriptions</div>
                     <div class="steps-subtitle">Write your own description for each step</div>
@@ -588,7 +831,7 @@
                 <div class="steps-list" id="stepsList">
                     <div class="empty-state">
                         <div class="empty-state-icon">📝</div>
-                        Rota hesaplandığında<br>adımlar burada görünecek
+                        Steps will appear here<br>when a route is calculated
                     </div>
                 </div>
 
@@ -614,7 +857,7 @@
         let pzInstance = null;
         let currentRoute = { start: '', end: '', floor: '', start_floor: '', end_floor: '' };
         let floorSvgs = [];       // multi-floor: [{floor, svg}, ...]
-        let currentFloorIdx = 0;  // hangi kat SVG'si gösteriliyor
+        let currentFloorIdx = 0;  // which floor SVG is currently displayed
 
         // ─── INIT ───
         async function init() {
@@ -625,7 +868,7 @@
                 onStartFloorChange();
                 onEndFloorChange();
             } catch (e) {
-                console.error('Rooms yüklenemedi:', e);
+                console.error('Failed to load rooms:', e);
             }
         }
 
@@ -648,32 +891,35 @@
             const rooms = allRooms[floor] || [];
             populateRoomSelect('startSelect', rooms);
 
-            // Başlangıç katının SVG'sini haritada göster
+            // Show the selected floor's SVG on the map
             await loadFloorSvg(floor);
         }
 
-        function onEndFloorChange() {
+        async function onEndFloorChange() {
             const floor = document.getElementById('endFloorSelect').value;
             const rooms = allRooms[floor] || [];
             populateRoomSelect('endSelect', rooms);
+
+            // Show the selected floor's SVG on the map
+            await loadFloorSvg(floor);
         }
 
         async function loadFloorSvg(floorName) {
             const container = document.getElementById('svgContainer');
             try {
                 const resp = await fetch(`/api/floor-svg/${encodeURIComponent(floorName)}`);
-                if (!resp.ok) throw new Error('SVG yüklenemedi');
+                if (!resp.ok) throw new Error('Failed to load SVG');
                 const svgContent = await resp.text();
                 updateMap(svgContent);
             } catch (e) {
-                console.error('Floor SVG yüklenemedi:', e);
-                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🗺️</div>Harita yüklenemedi</div>';
+                console.error('Failed to load floor SVG:', e);
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🗺️</div>Failed to load map</div>';
             }
         }
 
         function populateRoomSelect(selectId, rooms) {
             const sel = document.getElementById(selectId);
-            sel.innerHTML = '<option value="">-- Seçin --</option>';
+            sel.innerHTML = '<option value="">-- Select --</option>';
             for (const room of rooms) {
                 const opt = document.createElement('option');
                 opt.value = room.id;
@@ -690,12 +936,12 @@
             const endId = document.getElementById('endSelect').value;
 
             if (!startId || !endId) {
-                showToast('Başlangıç ve hedef seçin', 'error');
+                showToast('Please select start and destination', 'error');
                 return;
             }
 
             if (startId === endId && startFloor === endFloor) {
-                showToast('Başlangıç ve hedef farklı olmalı', 'error');
+                showToast('Start and destination must be different', 'error');
                 return;
             }
 
@@ -720,7 +966,7 @@
                 const data = await resp.json();
 
                 if (!resp.ok) {
-                    showToast(data.error || 'Rota hesaplanamadı', 'error');
+                    showToast(data.error || 'Route calculation failed', 'error');
                     return;
                 }
 
@@ -739,7 +985,7 @@
                 userDescriptions = {};
                 renderSteps();
 
-                // Multi-floor: kat SVG navigasyonu
+                // Multi-floor: floor SVG navigation
                 const floorNav = document.getElementById('floorNav');
                 if (data.is_multi_floor && data.floor_svgs && data.floor_svgs.length > 1) {
                     floorSvgs = data.floor_svgs;
@@ -757,23 +1003,26 @@
                 document.getElementById('distInfo').textContent = data.distance.toFixed(1) + 'm';
                 document.getElementById('turnInfo').textContent = data.turns;
                 
-                // Multi-floor bilgisi
+                // Multi-floor info
                 const floorChangeEl = document.getElementById('floorChangeInfo');
                 if (data.is_multi_floor && data.floor_changes > 0) {
                     floorChangeEl.style.display = 'inline';
-                    floorChangeEl.innerHTML = 'Kat Değişimi: <strong>' + data.floor_changes + '</strong>';
+                    floorChangeEl.innerHTML = 'Floor Changes: <strong>' + data.floor_changes + '</strong>';
                 } else {
                     floorChangeEl.style.display = 'none';
                 }
 
-                showToast('Rota hesaplandı ✓', 'success');
+                showToast('Route calculated ✓', 'success');
+
+                // Mobile: auto-switch to steps tab
+                autoSwitchToStepsIfMobile();
 
             } catch (e) {
                 console.error(e);
-                showToast('Sunucu hatası', 'error');
+                showToast('Server error', 'error');
             } finally {
                 btn.disabled = false;
-                btn.textContent = 'Hesapla';
+                btn.textContent = 'Calculate';
                 document.getElementById('loadingOverlay').classList.remove('active');
             }
         }
@@ -894,7 +1143,7 @@
             const stepsEl = document.getElementById('stepsList');
 
             if (currentSteps.length === 0) {
-                stepsEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div>Rota hesaplandığında<br>adımlar burada görünecek</div>';
+                stepsEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div>Steps will appear here<br>when a route is calculated</div>';
                 return;
             }
 
@@ -930,7 +1179,7 @@
                         class="step-textarea${textClass}" 
                         id="input-${step.step_number}" 
                         data-step="${step.step_number}"
-                        placeholder="Bu adım için tarifinizi yazın..."
+                        placeholder="Write your description for this step..."
                         oninput="onStepInput(this)"
                     >${savedText}</textarea>
                 </div>`;
@@ -1005,7 +1254,7 @@
 
                 if (resp.ok) {
                     showToast('Descriptions submitted successfully', 'success');
-                    // Formu sıfırla
+                    // Reset form
                     userDescriptions = {};
                     document.querySelectorAll('.desc-textarea').forEach(ta => ta.value = '');
                     updateProgress();
@@ -1026,6 +1275,41 @@
             toast.textContent = msg;
             toast.className = 'toast show' + (type ? ' ' + type : '');
             setTimeout(() => { toast.className = 'toast'; }, 3000);
+        }
+
+        // ─── TAB SWITCHING (mobile) ───
+        function switchTab(tab) {
+            const mapPanel = document.getElementById('mapPanel');
+            const stepsPanel = document.getElementById('stepsPanel');
+            const tabMap = document.getElementById('tabMap');
+            const tabSteps = document.getElementById('tabSteps');
+
+            if (tab === 'map') {
+                mapPanel.classList.add('active-tab');
+                mapPanel.classList.remove('hidden-tab');
+                stepsPanel.classList.add('hidden-tab');
+                stepsPanel.classList.remove('active-tab');
+                tabMap.classList.add('active');
+                tabSteps.classList.remove('active');
+                // Re-trigger panzoom resize
+                if (pzInstance) {
+                    setTimeout(() => pzInstance.resume(), 50);
+                }
+            } else {
+                stepsPanel.classList.add('active-tab');
+                stepsPanel.classList.remove('hidden-tab');
+                mapPanel.classList.add('hidden-tab');
+                mapPanel.classList.remove('active-tab');
+                tabSteps.classList.add('active');
+                tabMap.classList.remove('active');
+            }
+        }
+
+        // Auto-switch to steps tab when route is calculated (mobile)
+        function autoSwitchToStepsIfMobile() {
+            if (window.innerWidth <= 768 && currentSteps.length > 0) {
+                switchTab('steps');
+            }
         }
 
         // ─── KEYBOARD ───
