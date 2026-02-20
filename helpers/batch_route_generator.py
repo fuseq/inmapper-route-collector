@@ -696,9 +696,24 @@ def _merge_adjacent_micro_turns(turns, path_points, floor_areas):
                     i += 2
                     continue
                 else:
-                    # Aynı yön → büyük açılı olanı tut
+                    # Aynı yön → açıları birleştir
+                    combined_angle = t1['angle'] + t2['angle']
                     keep = t1 if t1['angle'] >= t2['angle'] else t2
-                    result.append(keep)
+                    merged = dict(keep)
+                    merged['angle'] = combined_angle
+                    
+                    # Birleşik açı BEND_THRESHOLD üstündeyse → gerçek dönüş
+                    if combined_angle >= BEND_THRESHOLD:
+                        merged['turn_type'] = 'turn'
+                        print(f"    [Micro→Turn] {dir1} {t1['angle']:.1f}° + "
+                              f"{t2['angle']:.1f}° = {combined_angle:.1f}° "
+                              f"(>= {BEND_THRESHOLD}° → TURN) [seg: {seg_dist:.0f}px]")
+                    else:
+                        print(f"    [Micro→Keep] {dir1} {t1['angle']:.1f}° + "
+                              f"{t2['angle']:.1f}° = {combined_angle:.1f}° "
+                              f"[seg: {seg_dist:.0f}px]")
+                    
+                    result.append(merged)
                     i += 2
                     continue
         
@@ -710,11 +725,11 @@ def _merge_adjacent_micro_turns(turns, path_points, floor_areas):
 
 def _find_door_junction_points(path_conn_ids, graph):
     """
-    Path'in başında ve sonunda kapı (door) connection'larının koridor ile
+    Path'in başında ve sonunda kapı (door) connection'larının ilk path ile
     buluştuğu junction noktalarını bulur.
     
-    Başlangıç: kapıdan çıkıp koridora geçiş noktası
-    Bitiş: koridordan kapıya giriş noktası
+    Sadece kapı çıkış geometrisini filtreler (kapı ile ilk path arasındaki
+    kısa segment junction'ı). Koridordaki gerçek dönüşlere dokunmaz.
     
     Returns:
         (start_junction, end_junction): Her biri (x, y) tuple veya None

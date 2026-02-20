@@ -17,8 +17,8 @@ from helpers.dijkstra import dijkstra_connections
 from helpers.extract_xml import build_graph, get_room_areas
 from helpers.path_analysis import NavigationGraphCleaner
 from helpers.route_visualizer import RouteVisualizer
-from helpers.direction_calculator import calculate_initial_direction
 from helpers.batch_route_generator import generate_alternative_routes_for_room_pair
+from helpers.multi_floor_route_generator import generate_multi_floor_route
 
 app = Flask(__name__)
 CORS(app)
@@ -103,7 +103,7 @@ def _find_room(floor_name, room_id):
     return None, None, None
 
 
-def _generate_route_svg(svg_path, connection_ids, anchor_ids, path_points):
+def _generate_route_svg(svg_path, connection_ids, anchor_ids):
     """Rota SVG içeriğini bellekte oluştur (dosyaya yazmadan)"""
     visualizer = RouteVisualizer(svg_path)
     visualizer.highlight_route_connections(
@@ -116,22 +116,6 @@ def _generate_route_svg(svg_path, connection_ids, anchor_ids, path_points):
             anchor_ids=anchor_ids,
             anchor_color='#FFD700'
         )
-
-    # Yön oku
-    if path_points and len(path_points) >= 2:
-        pts = [tuple(p) for p in path_points]
-        direction = calculate_initial_direction(pts, max_segments=5, min_segment_length=0)
-        if direction:
-            visualizer.draw_direction_arrow(
-                start_point=direction['start_point'],
-                direction_vector=direction['direction_vector'],
-                arrow_length=150.0,
-                arrow_color='#00FFFF',
-                arrow_width=8.0,
-                label=direction['compass'],
-                confidence=direction['confidence'],
-                compass=direction['compass']
-            )
 
     # SVG'yi string olarak döndür
     svg_ns = visualizer.namespace['svg']
@@ -226,67 +210,152 @@ def calculate_route():
             print(f"[API] HATA: Hedef oda bulunamadı: {end_id}", flush=True)
             return jsonify({'error': f'Hedef oda bulunamadı: {end_id}'}), 400
 
-        # Şimdilik sadece aynı kat destekleniyor
-        if start_floor != end_floor:
-            return jsonify({'error': 'Şimdilik sadece aynı kat rotaları destekleniyor'}), 400
+        # ── Aynı kat rotası ──
+        if start_floor == end_floor:
+            graph = _state['graphs'][start_idx]
 
-        graph = _state['graphs'][start_idx]
+            alternatives = generate_alternative_routes_for_room_pair(
+                start_room=start_room,
+                end_room=end_room,
+                graph=graph,
+                floor_areas=start_areas,
+                pixel_to_meter_ratio=0.1
+            )
 
-        # Rota hesapla
-        alternatives = generate_alternative_routes_for_room_pair(
+            if not alternatives or 'routes' not in alternatives:
+                print(f"[API] HATA: Rota bulunamadı", flush=True)
+                return jsonify({'error': 'Rota bulunamadı'}), 400
+
+            route_info = alternatives['routes'].get('shortest')
+            if not route_info:
+                route_info = list(alternatives['routes'].values())[0]
+
+            # SVG oluştur — sadece step'lerde kullanılan anchor'ları highlight et
+            svg_path = _state['svg_paths'][start_floor]
+            anchor_ids = []
+            for s in route_info.get('steps', []):
+                lm = s.get('landmark')
+                if lm:
+                    parts = lm.split(' - ', 1)
+                    if len(parts) == 2:
+                        anchor_ids.append(parts[1].strip())
+
+            svg_content = _generate_route_svg(
+                svg_path=svg_path,
+                connection_ids=route_info['path_connections'],
+                anchor_ids=anchor_ids
+            )
+
+            steps = [
+                {
+                    'step_number': s['step_number'],
+                    'action': s['action'],
+                    'distance_meters': s.get('distance_meters', 0),
+                    'description': s.get('description', ''),
+                    'landmark': s.get('landmark', None)
+                }
+                for s in route_info.get('steps', [])
+            ]
+
+            print(f"[API] ✓ Rota hazır: {len(steps)} adım, {route_info['summary']['total_distance_meters']:.1f}m", flush=True)
+
+            return jsonify({
+                'svg': svg_content,
+                'steps': steps,
+                'distance': route_info['summary']['total_distance_meters'],
+                'turns': route_info['turns_count'],
+                'start': f"{start_room['type']} - {start_room['id']}",
+                'end': f"{end_room['type']} - {end_room['id']}",
+                'floor': start_floor,
+                'start_floor': start_floor,
+                'end_floor': end_floor
+            })
+
+        # ── Farklı kat rotası (multi-floor) ──
+        print(f"[API] Multi-floor rota: {start_floor} → {end_floor}", flush=True)
+
+        start_graph = _state['graphs'][start_idx]
+        end_graph = _state['graphs'][end_idx]
+
+        multi_route = generate_multi_floor_route(
             start_room=start_room,
             end_room=end_room,
-            graph=graph,
-            floor_areas=start_areas,
+            start_graph=start_graph,
+            end_graph=end_graph,
+            all_graphs=_state['graphs'],
+            floor_names=_state['floor_names'],
+            floor_areas_list=_state['floor_areas'],
+            start_floor_name=start_floor,
+            end_floor_name=end_floor,
             pixel_to_meter_ratio=0.1
         )
 
-        if not alternatives or 'routes' not in alternatives:
-            print(f"[API] HATA: Rota bulunamadı", flush=True)
-            return jsonify({'error': 'Rota bulunamadı'}), 400
+        if not multi_route:
+            print(f"[API] HATA: Multi-floor rota bulunamadı", flush=True)
+            return jsonify({'error': 'Katlar arası rota bulunamadı'}), 400
 
-        # Sadece shortest rotayı al
-        route_info = alternatives['routes'].get('shortest')
-        if not route_info:
-            route_info = list(alternatives['routes'].values())[0]
+        # Her kat segmenti için SVG oluştur
+        floor_svgs = []  # [{floor, svg}, ...]
+        for seg in multi_route.get('segments', []):
+            if seg.get('type') != 'route_segment':
+                continue
+            seg_floor = seg.get('floor', start_floor)
+            if seg_floor not in _state['svg_paths']:
+                continue
 
-        # SVG oluştur
-        svg_path = _state['svg_paths'][start_floor]
-        anchor_ids = []
-        if 'turns' in route_info:
-            for turn in route_info['turns']:
-                if turn.get('anchor'):
-                    anchor_ids.append(turn['anchor'][1])
+            anchor_ids = []
+            for s in seg.get('steps', []):
+                lm = s.get('landmark')
+                if lm:
+                    parts = lm.split(' - ', 1)
+                    if len(parts) == 2:
+                        anchor_ids.append(parts[1].strip())
 
-        svg_content = _generate_route_svg(
-            svg_path=svg_path,
-            connection_ids=route_info['path_connections'],
-            anchor_ids=anchor_ids,
-            path_points=route_info.get('path_points', [])
-        )
+            svg_content = _generate_route_svg(
+                svg_path=_state['svg_paths'][seg_floor],
+                connection_ids=seg.get('path_connections', []),
+                anchor_ids=anchor_ids
+            )
+            floor_svgs.append({'floor': seg_floor, 'svg': svg_content})
 
-        # Steps hazırla
-        steps = [
-            {
-                'step_number': s['step_number'],
-                'action': s['action'],
+        # İlk katın SVG'sini varsayılan olarak göster
+        default_svg = floor_svgs[0]['svg'] if floor_svgs else ''
+
+        # Steps hazırla (multi-floor: portal geçişleri dahil)
+        steps = []
+        for s in multi_route.get('steps', []):
+            step = {
+                'step_number': s.get('step_number', 0),
+                'action': s.get('action', ''),
                 'distance_meters': s.get('distance_meters', 0),
                 'description': s.get('description', ''),
                 'landmark': s.get('landmark', None)
             }
-            for s in route_info.get('steps', [])
-        ]
+            if s.get('action') == 'FLOOR_CHANGE':
+                step['from_floor'] = s.get('from_floor', '')
+                step['to_floor'] = s.get('to_floor', '')
+                step['portal_type'] = s.get('portal_type', '')
+            steps.append(step)
 
-        print(f"[API] ✓ Rota hazır: {len(steps)} adım, {route_info['summary']['total_distance_meters']:.1f}m", flush=True)
+        total_dist = multi_route['summary']['total_distance_meters']
+        total_turns = multi_route['summary'].get('turns_count', 0)
+
+        print(f"[API] ✓ Multi-floor rota hazır: {len(steps)} adım, {total_dist:.1f}m, "
+              f"{multi_route['summary'].get('floor_changes', 0)} kat değişimi", flush=True)
 
         return jsonify({
-            'svg': svg_content,
+            'svg': default_svg,
+            'floor_svgs': floor_svgs,
             'steps': steps,
-            'distance': route_info['summary']['total_distance_meters'],
-            'turns': route_info['turns_count'],
+            'distance': total_dist,
+            'turns': total_turns,
             'start': f"{start_room['type']} - {start_room['id']}",
             'end': f"{end_room['type']} - {end_room['id']}",
-            'floor': start_floor
+            'floor': start_floor,
+            'start_floor': start_floor,
+            'end_floor': end_floor,
+            'is_multi_floor': True,
+            'floor_changes': multi_route['summary'].get('floor_changes', 0)
         })
 
     except Exception as e:
@@ -323,14 +392,15 @@ def _build_sheet_row(data):
     """Frontend verisini tek bir Google Sheets satırına dönüştür"""
     start_room = data.get('start_room', '')
     end_room = data.get('end_room', '')
-    floor = data.get('floor', '0')
+    start_floor = data.get('start_floor', data.get('floor', '0'))
+    end_floor = data.get('end_floor', data.get('floor', '0'))
     venue = data.get('venue', 'zorlu')
     steps = data.get('steps', [])
 
-    # ID: "Kat 0_Food_ID007_to_Kat 0_Shop_ID005"
+    # ID: "Kat 0_Food_ID007_to_Kat -1_Shop_ID005"
     start_compact = start_room.replace(' - ', '_').replace(' ', '_')
     end_compact = end_room.replace(' - ', '_').replace(' ', '_')
-    row_id = f"Kat {floor}_{start_compact}_to_Kat {floor}_{end_compact}"
+    row_id = f"{start_floor}_{start_compact}_to_{end_floor}_{end_compact}"
 
     # Metric Steps: her step tam formatlı satır
     metric_lines = []
@@ -351,7 +421,8 @@ def _build_sheet_row(data):
         'venue': venue,
         'start_room': start_room,
         'end_room': end_room,
-        'floor': f"Kat {floor}",
+        'start_floor': start_floor,
+        'end_floor': end_floor,
         'metric_steps': metric_text,
         'human_steps': human_text,
         'timestamp': data.get('timestamp', ''),

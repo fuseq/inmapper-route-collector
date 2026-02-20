@@ -85,34 +85,6 @@ class MetricRouteGenerator:
         store_side = self._compute_store_side(path_points, start_room_center,
                                               path_conn_ids, graph)
         
-        # İlk dönüş kapı çıkışına çok yakınsa (< 5m), START ile birleştir.
-        # START talimatı zaten koridor yönünü esas aldığından, kapı-koridor
-        # geçişindeki dönüşü ayrıca göstermek çelişki yaratır.
-        # NOT: Sadece 'turn' ve 'veer' tipi atlanır.
-        # 'bend' (PASS_BY) tipi bilgilendirici landmark'tır, atlanmamalıdır.
-        skip_first_turn = False
-        if turns and first_segment_distance < 5.0:
-            first_turn_type = turns[0].get('turn_type', 'turn')
-            if first_turn_type in ('turn', 'veer'):
-                # İlk dönüşün mesafesini de START'a ekle
-                # Sonraki turn'ü bul (bend'leri atla)
-                next_real_idx = None
-                for ni in range(1, len(turns)):
-                    if turns[ni].get('turn_type', 'turn') != 'bend':
-                        next_real_idx = ni
-                        break
-                
-                if next_real_idx is not None:
-                    next_turn_idx = self._find_turn_index_in_path(path_points, turns[next_real_idx]['point'])
-                    merged_distance = self._calculate_segment_distance(path_points, 0, next_turn_idx)
-                elif len(turns) > 1:
-                    second_turn_idx = self._find_turn_index_in_path(path_points, turns[1]['point'])
-                    merged_distance = self._calculate_segment_distance(path_points, 0, second_turn_idx)
-                else:
-                    merged_distance = self._calculate_segment_distance(path_points, 0, len(path_points) - 1)
-                first_segment_distance = merged_distance
-                skip_first_turn = True
-        
         if store_side == 'arka':
             description = f"{start_location} noktasından çıkıp düz ilerleyin"
         elif store_side:
@@ -135,10 +107,6 @@ class MetricRouteGenerator:
         
         # 2. Her dönüş/kırılım için bir adım oluştur
         for i, turn in enumerate(turns):
-            # İlk dönüş START ile birleştirildiyse atla
-            if i == 0 and skip_first_turn:
-                print(f"    [DEBUG] i={i} SKIPPED (skip_first_turn) type={turn.get('turn_type')}")
-                continue
             turn_point = turn['point']
             turn_direction = turn['direction']
             turn_type = turn.get('turn_type', 'turn')
@@ -221,9 +189,10 @@ class MetricRouteGenerator:
         Başlangıç odasının koridordaki yürüme yönüne göre hangi tarafta
         kalacağını hesaplar.
         
-        Kapı segmentleri (room içine giren ve door'la birleşen path'ler) 
-        atlanarak, ilk KORİDOR segmentinin yönüne bakılır. Bu sayede
-        oda gerçekten koridorun hangi tarafındaysa o taraf döner.
+        Kapı segmentlerini atlayarak ilk KORİDOR segmentinin yönüne bakılır.
+        Oda tarafı belirlemek için oda merkezi yerine KAPI'nın oda tarafındaki
+        ucu kullanılır — bu nokta her zaman koridorun doğru tarafındadır ve
+        büyük/uzak polygon merkezlerinden etkilenmez.
         
         SVG koordinat sisteminde (Y aşağı doğru artar, top-down harita):
         - cross > 0 → mağaza sağda
@@ -235,15 +204,14 @@ class MetricRouteGenerator:
         if not start_room_center or len(path_points) < 3:
             return None
         
-        # ── Koridor junction noktasını bul ──
-        # Kapı segmentlerini atlayarak ilk koridor connection'ının
-        # koordinatlarını doğrudan connection verilerinden al.
+        # ── Koridor junction ve kapı bilgisini bul ──
         corridor_junction = None
         corridor_next = None
+        door_room_side_point = None  # Kapının oda tarafındaki ucu
         
         if path_conn_ids and graph:
             conn_lookup = {c['id']: c for c in graph.connections}
-            door_count = 0
+            last_door_conn = None
             
             for i, conn_id in enumerate(path_conn_ids):
                 conn = conn_lookup.get(conn_id)
@@ -251,7 +219,7 @@ class MetricRouteGenerator:
                     continue
                     
                 if conn['type'] == 'door':
-                    door_count += 1
+                    last_door_conn = conn
                     continue
                 
                 # İlk koridor (non-door) connection bulundu
@@ -262,7 +230,6 @@ class MetricRouteGenerator:
                 if i > 0:
                     prev_conn = conn_lookup.get(path_conn_ids[i - 1])
                     if prev_conn:
-                        # Önceki connection'ın uç noktaları
                         prev_ends = [(prev_conn['x1'], prev_conn['y1']),
                                      (prev_conn['x2'], prev_conn['y2'])]
                         d_p1 = min(distance(p1, pe) for pe in prev_ends)
@@ -280,18 +247,28 @@ class MetricRouteGenerator:
                 else:
                     corridor_junction = p1
                     corridor_next = p2
+                
+                # Kapının oda tarafındaki ucunu bul
+                # Kapı'nın iki ucundan, koridor junction'a UZAK olan ucu
+                # odanın içindedir — o noktayı kullan
+                if last_door_conn and corridor_junction:
+                    dp1 = (last_door_conn['x1'], last_door_conn['y1'])
+                    dp2 = (last_door_conn['x2'], last_door_conn['y2'])
+                    d1_to_corr = distance(dp1, corridor_junction)
+                    d2_to_corr = distance(dp2, corridor_junction)
+                    # Koridor junction'a uzak olan uç = oda tarafı
+                    door_room_side_point = dp1 if d1_to_corr > d2_to_corr else dp2
+                
                 break
         
         # ── Koridor yönünü belirle ──
         if corridor_junction and corridor_next:
-            # Connection koordinatlarından doğrudan koridor yönü
             ref_point = corridor_junction
             
-            # Daha kararlı yön için: path_points üzerinde corridor_junction'a
-            # en yakın noktayı bul ve oradan en az 50px ileriye bak
+            # path_points üzerinde corridor_junction'a en yakın noktayı
+            # bul ve oradan en az 50px ileriye bak
             MIN_WALK_DIST = 50.0
             
-            # corridor_junction'a en yakın path_points indeksini bul
             best_idx = 0
             best_dist = float('inf')
             for k, pp in enumerate(path_points):
@@ -300,7 +277,6 @@ class MetricRouteGenerator:
                     best_dist = d
                     best_idx = k
             
-            # best_idx'ten itibaren 50px ileriye bak
             walk_ref_idx = min(best_idx + 1, len(path_points) - 1)
             cumulative = 0.0
             for k in range(best_idx, len(path_points) - 1):
@@ -318,7 +294,7 @@ class MetricRouteGenerator:
             walk_dx = path_points[walk_ref_idx][0] - ref_point[0]
             walk_dy = path_points[walk_ref_idx][1] - ref_point[1]
         else:
-            # Fallback: path_points[1]'den itibaren (eski davranış)
+            # Fallback: path_points[1]'den itibaren
             ref_point = path_points[1]
             MIN_WALK_DIST = 50.0
             walk_ref_idx = 2
@@ -346,30 +322,25 @@ class MetricRouteGenerator:
         walk_dy /= walk_mag
         
         # ── Mağaza pozisyonunu hesapla ──
-        # Referans nokta (koridor junction) ile mağaza merkezi arasındaki vektör
-        store_dx = start_room_center[0] - ref_point[0]
-        store_dy = start_room_center[1] - ref_point[1]
+        # Kapının oda tarafındaki ucunu kullan (varsa).
+        # Bu nokta koridorun doğru tarafında olduğu garanti —
+        # büyük polygon merkezlerinden çok daha güvenilir.
+        room_indicator = door_room_side_point if door_room_side_point else start_room_center
+        
+        store_dx = room_indicator[0] - ref_point[0]
+        store_dy = room_indicator[1] - ref_point[1]
         
         store_mag = math.hypot(store_dx, store_dy)
         if store_mag < 1.0:
             return None
         
         # ── Çapraz çarpım: koridorun hangi tarafında? ──
-        # cross = walk × store  (2D skaler)
-        # SVG koordinat sisteminde (Y aşağı):
-        #   cross > 0 → mağaza sağda
-        #   cross < 0 → mağaza solda
         cross = walk_dx * store_dy - walk_dy * store_dx
         
-        # Açı tabanlı kontrol: mağaza koridorun ne kadar "yan"ında?
-        # sin(açı) = |cross| / store_mag
-        # Eğer açı çok küçükse (< ~10°), mağaza koridorun doğrusal 
-        # devamında → 'arka' (çıkıp düz ilerleyin)
-        # Eğer açı büyükse, mağaza koridorun yanında → 'sol' / 'sag'
+        # Açı tabanlı kontrol: sin_angle küçükse mağaza koridorun
+        # doğrusal devamında → 'arka'
         sin_angle = abs(cross) / store_mag
         
-        # sin(10°) ≈ 0.174 — bu eşiğin altında mağaza neredeyse
-        # koridor çizgisi üzerinde (arkada veya önde)
         if sin_angle < 0.18:
             return 'arka'
         

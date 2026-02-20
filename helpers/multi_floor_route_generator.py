@@ -91,7 +91,8 @@ def generate_multi_floor_route(start_room: Dict,
         start_desc=f"{current_room['type']} - {current_room['id']}",
         end_desc=f"Portal: {portal_data['portal_info']['type']} {portal_data['portal_info']['number']}",
         floor_name=current_floor,
-        pixel_to_meter_ratio=pixel_to_meter_ratio
+        pixel_to_meter_ratio=pixel_to_meter_ratio,
+        start_room_center=start_room.get('center')
     )
     
     if segment:
@@ -179,12 +180,14 @@ def create_route_segment(start_conn_id: str,
                         end_desc: str,
                         floor_name: str,
                         pixel_to_meter_ratio: float = 0.1,
-                        route_type: str = "distance") -> Optional[Dict]:
+                        route_type: str = "distance",
+                        start_room_center: Optional[Tuple[float, float]] = None) -> Optional[Dict]:
     """
     İki connection arasında rota segment'i oluşturur
     
     Args:
         route_type: "distance" (en kısa) veya "turns" (en az dönüş)
+        start_room_center: Başlangıç odasının merkez koordinatları (mağaza tarafı belirlemek için)
     """
     if not start_conn_id or not end_conn_id:
         return None
@@ -227,6 +230,7 @@ def create_route_segment(start_conn_id: str,
         turns=all_turns,
         start_location=start_desc,
         end_location=end_desc,
+        start_room_center=start_room_center,
         path_conn_ids=path,
         graph=graph
     )

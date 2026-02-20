@@ -73,7 +73,7 @@
             font-weight: 500;
             background: white;
             cursor: pointer;
-            min-width: 140px;
+            min-width: 100px;
             transition: border-color 0.2s;
         }
 
@@ -160,6 +160,47 @@
         }
 
         .map-overlay strong { color: #667eea; }
+
+        .floor-nav {
+            position: absolute;
+            top: 12px;
+            right: 70px;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(8px);
+            padding: 6px 10px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            z-index: 10;
+        }
+
+        .floor-nav-btn {
+            width: 30px;
+            height: 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .floor-nav-btn:hover:not(:disabled) { background: #5a6fd6; }
+        .floor-nav-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        .floor-nav-label {
+            font-size: 13px;
+            font-weight: 700;
+            color: #333;
+            min-width: 50px;
+            text-align: center;
+        }
 
         .zoom-controls {
             position: absolute;
@@ -484,17 +525,14 @@
             </div>
 
             <div class="room-selector-group">
-                <label>Kat:</label>
-                <select class="room-select" id="floorSelect" onchange="onFloorChange()"></select>
-            </div>
-
-            <div class="room-selector-group">
                 <label>Başlangıç:</label>
+                <select class="room-select" id="startFloorSelect" onchange="onStartFloorChange()"></select>
                 <select class="room-select start" id="startSelect"></select>
             </div>
 
             <div class="room-selector-group">
                 <label>Hedef:</label>
+                <select class="room-select" id="endFloorSelect" onchange="onEndFloorChange()"></select>
                 <select class="room-select end" id="endSelect"></select>
             </div>
 
@@ -505,6 +543,7 @@
             <div class="route-info" id="routeInfo" style="display: none;">
                 <span>Mesafe: <strong id="distInfo">-</strong></span>
                 <span>Dönüş: <strong id="turnInfo">-</strong></span>
+                <span id="floorChangeInfo" style="display: none;"></span>
             </div>
         </div>
 
@@ -514,6 +553,12 @@
             <div class="map-panel">
                 <div class="map-overlay" id="mapOverlay">
                     Zoom: <strong id="zoomLevel">100%</strong>
+                </div>
+
+                <div class="floor-nav" id="floorNav" style="display: none;">
+                    <button class="floor-nav-btn" id="prevFloorBtn" onclick="prevFloorSvg()" disabled>◀</button>
+                    <span class="floor-nav-label" id="floorNavLabel">Kat 0</span>
+                    <button class="floor-nav-btn" id="nextFloorBtn" onclick="nextFloorSvg()">▶</button>
                 </div>
 
                 <div class="svg-container" id="svgContainer"></div>
@@ -567,39 +612,50 @@
         let currentSteps = [];
         let userDescriptions = {};
         let pzInstance = null;
-        let currentRoute = { start: '', end: '', floor: '' };
+        let currentRoute = { start: '', end: '', floor: '', start_floor: '', end_floor: '' };
+        let floorSvgs = [];       // multi-floor: [{floor, svg}, ...]
+        let currentFloorIdx = 0;  // hangi kat SVG'si gösteriliyor
 
         // ─── INIT ───
         async function init() {
             try {
                 const resp = await fetch('/api/rooms');
                 allRooms = await resp.json();
-                populateFloorSelect();
-                onFloorChange();
+                populateFloorSelects();
+                onStartFloorChange();
+                onEndFloorChange();
             } catch (e) {
                 console.error('Rooms yüklenemedi:', e);
             }
         }
 
-        function populateFloorSelect() {
-            const sel = document.getElementById('floorSelect');
-            sel.innerHTML = '';
-            for (const floor of Object.keys(allRooms)) {
-                const opt = document.createElement('option');
-                opt.value = floor;
-                opt.textContent = floor;
-                sel.appendChild(opt);
-            }
+        function populateFloorSelects() {
+            const floors = Object.keys(allRooms);
+            ['startFloorSelect', 'endFloorSelect'].forEach(id => {
+                const sel = document.getElementById(id);
+                sel.innerHTML = '';
+                for (const floor of floors) {
+                    const opt = document.createElement('option');
+                    opt.value = floor;
+                    opt.textContent = floor;
+                    sel.appendChild(opt);
+                }
+            });
         }
 
-        async function onFloorChange() {
-            const floor = document.getElementById('floorSelect').value;
+        async function onStartFloorChange() {
+            const floor = document.getElementById('startFloorSelect').value;
             const rooms = allRooms[floor] || [];
             populateRoomSelect('startSelect', rooms);
-            populateRoomSelect('endSelect', rooms);
 
-            // Seçili katın SVG'sini yükle
+            // Başlangıç katının SVG'sini haritada göster
             await loadFloorSvg(floor);
+        }
+
+        function onEndFloorChange() {
+            const floor = document.getElementById('endFloorSelect').value;
+            const rooms = allRooms[floor] || [];
+            populateRoomSelect('endSelect', rooms);
         }
 
         async function loadFloorSvg(floorName) {
@@ -628,7 +684,8 @@
 
         // ─── ROUTE CALCULATION ───
         async function calculateRoute() {
-            const floor = document.getElementById('floorSelect').value;
+            const startFloor = document.getElementById('startFloorSelect').value;
+            const endFloor = document.getElementById('endFloorSelect').value;
             const startId = document.getElementById('startSelect').value;
             const endId = document.getElementById('endSelect').value;
 
@@ -637,7 +694,7 @@
                 return;
             }
 
-            if (startId === endId) {
+            if (startId === endId && startFloor === endFloor) {
                 showToast('Başlangıç ve hedef farklı olmalı', 'error');
                 return;
             }
@@ -653,9 +710,9 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        start_floor: floor,
+                        start_floor: startFloor,
                         start_id: startId,
-                        end_floor: floor,
+                        end_floor: endFloor,
                         end_id: endId
                     })
                 });
@@ -672,14 +729,42 @@
 
                 // Update steps
                 currentSteps = data.steps;
-                currentRoute = { start: data.start, end: data.end, floor: data.floor };
+                currentRoute = {
+                    start: data.start,
+                    end: data.end,
+                    floor: data.floor,
+                    start_floor: data.start_floor || data.floor,
+                    end_floor: data.end_floor || data.floor
+                };
                 userDescriptions = {};
                 renderSteps();
+
+                // Multi-floor: kat SVG navigasyonu
+                const floorNav = document.getElementById('floorNav');
+                if (data.is_multi_floor && data.floor_svgs && data.floor_svgs.length > 1) {
+                    floorSvgs = data.floor_svgs;
+                    currentFloorIdx = 0;
+                    floorNav.style.display = 'flex';
+                    updateFloorNav();
+                } else {
+                    floorSvgs = [];
+                    currentFloorIdx = 0;
+                    floorNav.style.display = 'none';
+                }
 
                 // Update info
                 document.getElementById('routeInfo').style.display = 'flex';
                 document.getElementById('distInfo').textContent = data.distance.toFixed(1) + 'm';
                 document.getElementById('turnInfo').textContent = data.turns;
+                
+                // Multi-floor bilgisi
+                const floorChangeEl = document.getElementById('floorChangeInfo');
+                if (data.is_multi_floor && data.floor_changes > 0) {
+                    floorChangeEl.style.display = 'inline';
+                    floorChangeEl.innerHTML = 'Kat Değişimi: <strong>' + data.floor_changes + '</strong>';
+                } else {
+                    floorChangeEl.style.display = 'none';
+                }
 
                 showToast('Rota hesaplandı ✓', 'success');
 
@@ -754,6 +839,29 @@
                 pzInstance.moveTo(0, 0);
                 pzInstance.zoomAbs(0, 0, 1);
                 document.getElementById('zoomLevel').textContent = '100%';
+            }
+        }
+
+        // ─── FLOOR NAV (multi-floor) ───
+        function updateFloorNav() {
+            document.getElementById('floorNavLabel').textContent = floorSvgs[currentFloorIdx].floor;
+            document.getElementById('prevFloorBtn').disabled = (currentFloorIdx === 0);
+            document.getElementById('nextFloorBtn').disabled = (currentFloorIdx >= floorSvgs.length - 1);
+        }
+
+        function prevFloorSvg() {
+            if (currentFloorIdx > 0) {
+                currentFloorIdx--;
+                updateMap(floorSvgs[currentFloorIdx].svg);
+                updateFloorNav();
+            }
+        }
+
+        function nextFloorSvg() {
+            if (currentFloorIdx < floorSvgs.length - 1) {
+                currentFloorIdx++;
+                updateMap(floorSvgs[currentFloorIdx].svg);
+                updateFloorNav();
             }
         }
 
@@ -873,6 +981,8 @@
                 start_room: currentRoute.start,
                 end_room: currentRoute.end,
                 floor: currentRoute.floor,
+                start_floor: currentRoute.start_floor,
+                end_floor: currentRoute.end_floor,
                 timestamp: new Date().toISOString(),
                 steps: currentSteps.map(step => ({
                     step_number: step.step_number,
