@@ -10,6 +10,7 @@ from flask import Flask, jsonify, request, send_file, render_template_string
 from flask_cors import CORS
 import json
 import os
+import re
 import xml.etree.ElementTree as ET
 import urllib.request
 
@@ -29,8 +30,9 @@ _state = {
     'floor_areas': [],
     'floor_names': [],
     'svg_paths': {},
-    'venue': None
+    'venue': None,
 }
+
 
 
 def init_venue(venue="zorlu"):
@@ -168,6 +170,7 @@ def get_floor_svg(floor_name):
         visualizer = RouteVisualizer(svg_path)
         svg_ns = visualizer.namespace['svg']
         ET.register_namespace('', svg_ns)
+
         svg_content = ET.tostring(visualizer.root, encoding='unicode')
         return svg_content, 200, {'Content-Type': 'image/svg+xml; charset=utf-8'}
     except Exception as e:
