@@ -124,10 +124,8 @@ class RouteVisualizer:
         if portals_group is not None:
             self._make_group_visible(portals_group)
         
-        # Icons grubunu gizle (portal'ların görünmesini engelliyor)
-        icons_group = self.root.find(".//svg:g[@id='Icons']", self.namespace)
-        if icons_group is not None:
-            self._hide_group(icons_group)
+        # Icons grubunu KORUYORUZ — artık gizlemiyoruz
+        # Portal anchor'ları için üstte highlight overlay çizeceğiz
         
         if rooms_group is None and portals_group is None and doors_group is None:
             print("Uyarı: Ne 'Rooms' ne 'Portals' ne de 'Doors' grubu bulunamadı")
@@ -135,10 +133,13 @@ class RouteVisualizer:
         
         print(f"  [Anchor Highlight] {len(anchor_ids)} anchor highlight edilecek: {list(set(anchor_ids))[:5]}...")
         
+        svg_ns = self.namespace['svg']
+        
         # Her anchor ID için ilgili elementi bul ve highlight et
         for anchor_id in anchor_ids:
             element = None
             is_door = False
+            is_portal = False
             
             # Önce Rooms grubunda ara
             if rooms_group is not None:
@@ -153,6 +154,8 @@ class RouteVisualizer:
             # Rooms'da bulunamazsa Portals grubunda ara (Elev, Stairs gibi)
             if element is None and portals_group is not None:
                 element = portals_group.find(f".//*[@id='{anchor_id}']", self.namespace)
+                if element is not None:
+                    is_portal = True
             
             # Portals'da bulunamazsa Doors grubunda ara (carpark door'ları için)
             if element is None and doors_group is not None:
@@ -169,33 +172,34 @@ class RouteVisualizer:
                 element = self.root.find(f".//*[@id='{anchor_id}']", self.namespace)
             
             if element is not None:
-                # Mevcut style'ı al
-                current_style = element.get('style', '')
-                
-                # Door ise önce görünür yap (display ve visibility)
-                if is_door or anchor_id.startswith('carpark-'):
-                    # display:none ve visibility:hidden'ı kaldır
-                    current_style = current_style.replace('display:none', 'display:inline')
-                    current_style = current_style.replace('display: none', 'display:inline')
-                    current_style = current_style.replace('visibility:hidden', 'visibility:visible')
-                    current_style = current_style.replace('visibility: hidden', 'visibility:visible')
-                    
-                    # Yeni style oluştur (door'lar için farklı renk - turuncu)
-                    new_style = f"display:inline;visibility:visible;stroke:{anchor_color};stroke-width:{stroke_width + 2};stroke-opacity:1;"
+                if is_portal:
+                    # Portal anchor: Icons grubunu gizlemek yerine,
+                    # portal'ın üzerinde highlight overlay çiz
+                    cx, cy, radius = self._get_portal_highlight_pos(element)
+                    if cx is not None:
+                        # Highlight dairesi çiz (SVG'nin en üstüne ekle — Icons'un üstünde)
+                        circle = ET.SubElement(self.root, f'{{{svg_ns}}}circle')
+                        circle.set('cx', str(cx))
+                        circle.set('cy', str(cy))
+                        circle.set('r', str(radius))
+                        circle.set('fill', anchor_color)
+                        circle.set('fill-opacity', str(fill_opacity + 0.1))
+                        circle.set('stroke', anchor_color)
+                        circle.set('stroke-width', str(stroke_width + 1))
+                        circle.set('stroke-opacity', '0.9')
+                        highlighted_count += 1
+                    else:
+                        # Fallback: normal highlight
+                        self._apply_highlight_style(element, anchor_color, stroke_width, fill_opacity, is_door=False)
+                        highlighted_count += 1
+                elif is_door or anchor_id.startswith('carpark-'):
+                    # Door anchor
+                    self._apply_highlight_style(element, anchor_color, stroke_width, fill_opacity, is_door=True)
+                    highlighted_count += 1
                 else:
-                    # Yeni style oluştur (normal odalar için)
-                    new_style = f"fill:{anchor_color};fill-opacity:{fill_opacity};stroke:{anchor_color};stroke-width:{stroke_width};"
-                
-                # Eski fill ve stroke değerlerini kaldır, yenileri ekle
-                style_parts = [s for s in current_style.split(';') if s.strip() and 
-                              not s.strip().startswith('fill') and 
-                              not s.strip().startswith('stroke') and
-                              not s.strip().startswith('display') and
-                              not s.strip().startswith('visibility')]
-                style_parts.append(new_style)
-                
-                element.set('style', ';'.join(style_parts))
-                highlighted_count += 1
+                    # Normal oda anchor
+                    self._apply_highlight_style(element, anchor_color, stroke_width, fill_opacity, is_door=False)
+                    highlighted_count += 1
             else:
                 print(f"    [Anchor Highlight] '{anchor_id}' bulunamadı!")
         
@@ -205,6 +209,43 @@ class RouteVisualizer:
             print(f"  [Anchor Highlight] Hiçbir anchor bulunamadı!")
         
         return highlighted_count
+    
+    def _get_portal_highlight_pos(self, element):
+        """Portal element'in highlight pozisyonunu hesapla (merkez ve yarıçap)"""
+        tag = element.tag.split('}')[-1]
+        if tag == 'line':
+            x1 = float(element.get('x1', 0))
+            y1 = float(element.get('y1', 0))
+            x2 = float(element.get('x2', 0))
+            y2 = float(element.get('y2', 0))
+            cx = (x1 + x2) / 2
+            cy = (y1 + y2) / 2
+            import math
+            length = math.hypot(x2 - x1, y2 - y1)
+            radius = max(length * 0.8, 8)
+            return cx, cy, radius
+        return None, None, None
+    
+    def _apply_highlight_style(self, element, anchor_color, stroke_width, fill_opacity, is_door=False):
+        """Element'e highlight style uygula"""
+        current_style = element.get('style', '')
+        
+        if is_door:
+            current_style = current_style.replace('display:none', 'display:inline')
+            current_style = current_style.replace('display: none', 'display:inline')
+            current_style = current_style.replace('visibility:hidden', 'visibility:visible')
+            current_style = current_style.replace('visibility: hidden', 'visibility:visible')
+            new_style = f"display:inline;visibility:visible;stroke:{anchor_color};stroke-width:{stroke_width + 2};stroke-opacity:1;"
+        else:
+            new_style = f"fill:{anchor_color};fill-opacity:{fill_opacity};stroke:{anchor_color};stroke-width:{stroke_width};"
+        
+        style_parts = [s for s in current_style.split(';') if s.strip() and 
+                      not s.strip().startswith('fill') and 
+                      not s.strip().startswith('stroke') and
+                      not s.strip().startswith('display') and
+                      not s.strip().startswith('visibility')]
+        style_parts.append(new_style)
+        element.set('style', ';'.join(style_parts))
     
     def _make_paths_visible(self, paths_group):
         """Paths grubunu görünür hale getirir"""

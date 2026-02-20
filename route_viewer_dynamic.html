@@ -374,6 +374,12 @@
             font-weight: 600;
             color: #333;
         }
+        .step-alt-anchors {
+            font-size: 11px;
+            color: #888;
+            padding: 2px 0 2px 44px;
+            font-style: italic;
+        }
 
         .step-distance {
             font-size: 12px;
@@ -886,10 +892,32 @@
             });
         }
 
+        function clearRouteDisplay() {
+            // Clear steps
+            currentSteps = [];
+            userDescriptions = {};
+            const stepsEl = document.getElementById('stepsList');
+            stepsEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div>Steps will appear here<br>when a route is calculated</div>';
+            // Reset progress
+            document.getElementById('filledCount').textContent = '0';
+            document.getElementById('totalCount').textContent = '0';
+            document.getElementById('progressFill').style.width = '0%';
+            // Hide floor nav
+            const floorNav = document.getElementById('floorNav');
+            if (floorNav) floorNav.style.display = 'none';
+            floorSvgs = [];
+            currentFloorIdx = 0;
+            // Reset route info
+            currentRoute = { start: '', end: '', floor: '', start_floor: '', end_floor: '' };
+        }
+
         async function onStartFloorChange() {
             const floor = document.getElementById('startFloorSelect').value;
             const rooms = allRooms[floor] || [];
             populateRoomSelect('startSelect', rooms);
+
+            // Clear existing route display when floor changes
+            clearRouteDisplay();
 
             // Show the selected floor's SVG on the map
             await loadFloorSvg(floor);
@@ -899,6 +927,9 @@
             const floor = document.getElementById('endFloorSelect').value;
             const rooms = allRooms[floor] || [];
             populateRoomSelect('endSelect', rooms);
+
+            // Clear existing route display when floor changes
+            clearRouteDisplay();
 
             // Show the selected floor's SVG on the map
             await loadFloorSvg(floor);
@@ -1164,6 +1195,13 @@
                 const landmarkPad = landmarkBracket.padEnd(20);
                 const fullSystemLine = `${step.step_number}. ${actionPad} ${distPad} ${landmarkPad} | ${step.description}`;
 
+                // Alternative anchors line
+                const altLandmarks = step.alt_landmarks || [];
+                let altLine = '';
+                if (altLandmarks.length > 0) {
+                    altLine = `\n   Alt: ${altLandmarks.join(' | ')}`;
+                }
+
                 html += `
                 <div class="step-card${filledClass}" id="card-${step.step_number}">
                     <div class="step-card-header">
@@ -1172,8 +1210,9 @@
                         ${landmark ? `<span class="step-landmark">${landmark}</span>` : ''}
                         ${distStr !== '0.0m' ? `<span class="step-distance">${distStr}</span>` : ''}
                     </div>
+                    ${altLandmarks.length > 0 ? `<div class="step-alt-anchors">Alt: ${altLandmarks.join(' · ')}</div>` : ''}
                     <div class="step-system-label">System</div>
-                    <div class="step-system-desc">${fullSystemLine}</div>
+                    <div class="step-system-desc">${fullSystemLine}${altLine}</div>
                     <div class="step-input-label">Your Description</div>
                     <textarea 
                         class="step-textarea${textClass}" 

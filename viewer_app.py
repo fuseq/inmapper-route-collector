@@ -40,13 +40,14 @@ def init_venue(venue="zorlu"):
 
     if venue == "zorlu":
         svg_paths = {
+            "Kat 1": "files/floors/1.svg",
             "Kat 0": "files/floors/0.svg",
             "Kat -1": "files/floors/-1.svg",
             "Kat -2": "files/floors/-2.svg",
             "Kat -3": "files/floors/-3.svg"
         }
         portals_path = "files/supportive/portals.json"
-        floor_names = ["Kat 0", "Kat -1", "Kat -2", "Kat -3"]
+        floor_names = ["Kat 1", "Kat 0", "Kat -1", "Kat -2", "Kat -3"]
     else:
         svg_paths = {
             "Kat 0": "files/floors/ankarasehir/0.svg",
@@ -135,7 +136,7 @@ def index():
 def get_rooms():
     """Tüm katların oda listesini döndür"""
     result = {}
-    allowed_types = {'Shop', 'Food', 'Medical', 'Commercial', 'Social'}
+    allowed_types = {'Shop', 'Food', 'Medical', 'Commercial', 'Social', 'Other'}
 
     for i, floor_name in enumerate(_state['floor_names']):
         rooms = []
@@ -252,7 +253,8 @@ def calculate_route():
                     'action': s['action'],
                     'distance_meters': s.get('distance_meters', 0),
                     'description': s.get('description', ''),
-                    'landmark': s.get('landmark', None)
+                    'landmark': s.get('landmark', None),
+                    'alt_landmarks': s.get('alt_landmarks', [])
                 }
                 for s in route_info.get('steps', [])
             ]
@@ -329,7 +331,8 @@ def calculate_route():
                 'action': s.get('action', ''),
                 'distance_meters': s.get('distance_meters', 0),
                 'description': s.get('description', ''),
-                'landmark': s.get('landmark', None)
+                'landmark': s.get('landmark', None),
+                'alt_landmarks': s.get('alt_landmarks', [])
             }
             if s.get('action') == 'FLOOR_CHANGE':
                 step['from_floor'] = s.get('from_floor', '')

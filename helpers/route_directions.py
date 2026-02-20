@@ -12,7 +12,8 @@ class RouteStep:
     
     def __init__(self, step_number: int, action: str, distance_meters: float, 
                  cumulative_distance: float, description: str, 
-                 landmark: Optional[str] = None, direction: Optional[str] = None):
+                 landmark: Optional[str] = None, direction: Optional[str] = None,
+                 alt_landmarks: Optional[List[str]] = None):
         self.step_number = step_number
         self.action = action  # "START", "CONTINUE", "TURN_LEFT", "TURN_RIGHT", "ARRIVE"
         self.distance_meters = distance_meters
@@ -20,13 +21,14 @@ class RouteStep:
         self.description = description
         self.landmark = landmark
         self.direction = direction
+        self.alt_landmarks = alt_landmarks or []
     
     def __str__(self):
         return f"{self.step_number}. {self.description}"
     
     def to_dict(self):
         """JSON formatına dönüştür"""
-        return {
+        d = {
             "step_number": self.step_number,
             "action": self.action,
             "distance_meters": round(self.distance_meters, 1),
@@ -35,6 +37,9 @@ class RouteStep:
             "landmark": self.landmark,
             "direction": self.direction
         }
+        if self.alt_landmarks:
+            d["alt_landmarks"] = self.alt_landmarks
+        return d
 
 
 class MetricRouteGenerator:
@@ -130,9 +135,16 @@ class MetricRouteGenerator:
                 
                 # Landmark bilgisini oluştur
                 landmark_text = None
+                alt_landmarks = None
                 if anchor:
-                    room_type, room_id, area, dist = anchor
+                    room_type, room_id, area, dist = anchor[:4]
                     landmark_text = f"{room_type} - {room_id}"
+                    # Collect alternative anchors if available
+                    alt_anchors_list = anchor[4] if len(anchor) > 4 else []
+                    alt_landmark_texts = []
+                    for alt in alt_anchors_list:
+                        alt_landmark_texts.append(f"{alt[0]} - {alt[1]}")
+                    alt_landmarks = alt_landmark_texts if alt_landmark_texts else None
                 
                 if turn_type == 'veer':
                     # Zigzag → hafif yönelme talimatı
@@ -163,7 +175,8 @@ class MetricRouteGenerator:
                     cumulative_distance=cumulative_distance,
                     description=description,
                     landmark=landmark_text,
-                    direction=step_direction
+                    direction=step_direction,
+                    alt_landmarks=alt_landmarks
                 )
                 self.steps.append(step)
                 cumulative_distance += segment_distance

@@ -218,7 +218,7 @@ def find_nearest_largest_room(turn_point, room_areas, max_distance=500, pixel_to
     # Anchor olarak kullanılabilecek oda tipleri
     # Shop, Food, Medical, Commercial, Social = navigasyonda referans olabilecek yerler
     # Building, Walking, Water, Green, Other = navigasyonda referans olmaz
-    allowed_types = {'Shop', 'Food', 'Medical', 'Commercial', 'Social'}
+    allowed_types = {'Shop', 'Food', 'Medical', 'Commercial', 'Social', 'Other'}
     
     # En yakın odaları topla
     candidates = []
@@ -368,7 +368,17 @@ def find_nearest_largest_room(turn_point, room_areas, max_distance=500, pixel_to
                     }
     
     if best_room:
-        return (best_room['type'], best_room['id'], best_room['area'], best_room['distance'])
+        # Sort candidates by distance and return top 3 alternatives (excluding best)
+        candidates.sort(key=lambda c: c['distance'])
+        alt_anchors = []
+        seen_ids = {best_room['id']}
+        for c in candidates:
+            if c['id'] not in seen_ids:
+                alt_anchors.append((c['type'], c['id'], c['area'], c['distance']))
+                seen_ids.add(c['id'])
+                if len(alt_anchors) >= 2:
+                    break
+        return (best_room['type'], best_room['id'], best_room['area'], best_room['distance'], alt_anchors)
     
     return None
 
@@ -856,7 +866,7 @@ def _detect_turns_from_path(path_points, path_conn_ids, graph, floor_areas):
             # Bend'ler için anchor'ın hangi tarafta olduğunu hesapla
             anchor_side = None
             if turn_type == 'bend' and nearest_room:
-                room_type, room_id, area, dist = nearest_room
+                room_type, room_id, area, dist = nearest_room[:4]
                 anchor_center = _find_room_center(room_id, floor_areas)
                 if anchor_center:
                     anchor_side = _compute_anchor_side(
