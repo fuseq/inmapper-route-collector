@@ -10,7 +10,6 @@ from flask import Flask, jsonify, request, send_file, render_template_string
 from flask_cors import CORS
 import json
 import os
-import re
 import xml.etree.ElementTree as ET
 import urllib.request
 
@@ -30,9 +29,8 @@ _state = {
     'floor_areas': [],
     'floor_names': [],
     'svg_paths': {},
-    'venue': None,
+    'venue': None
 }
-
 
 
 def init_venue(venue="zorlu"):
@@ -170,7 +168,6 @@ def get_floor_svg(floor_name):
         visualizer = RouteVisualizer(svg_path)
         svg_ns = visualizer.namespace['svg']
         ET.register_namespace('', svg_ns)
-
         svg_content = ET.tostring(visualizer.root, encoding='unicode')
         return svg_content, 200, {'Content-Type': 'image/svg+xml; charset=utf-8'}
     except Exception as e:
@@ -432,7 +429,8 @@ def _build_sheet_row(data):
         'metric_steps': metric_text,
         'human_steps': human_text,
         'timestamp': data.get('timestamp', ''),
-        'step_count': len(steps)
+        'step_count': len(steps),
+        'submitted_by': data.get('submitted_by', 'anonymous'),
     }
 
 
@@ -476,6 +474,59 @@ def submit_descriptions():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/submitted-routes', methods=['GET'])
+def get_submitted_routes():
+    """Return list of route IDs that have already been submitted."""
+    submitted = set()
+
+    # Google Sheets'ten çek
+    if GOOGLE_SHEETS_URL:
+        try:
+            req = urllib.request.Request(GOOGLE_SHEETS_URL, method='GET')
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read().decode('utf-8'))
+            for rid in result.get('route_ids', []):
+                if rid:
+                    submitted.add(rid)
+            print(f"[ROUTES] Loaded {len(submitted)} route IDs from Google Sheets")
+        except Exception as e:
+            print(f"[WARN] Could not fetch from Google Sheets: {e}")
+
+    # Lokal fallback
+    if not submitted:
+        local_file = os.path.join('submissions', 'human_route_collection.json')
+        if os.path.exists(local_file):
+            try:
+                with open(local_file, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                    if content.startswith('['):
+                        rows = json.loads(content)
+                    else:
+                        rows = json.loads('[' + content + ']')
+                for row in rows:
+                    rid = row.get('ID', row.get('id', ''))
+                    if rid:
+                        submitted.add(rid)
+            except Exception as e:
+                print(f"[WARN] Could not read local submissions: {e}")
+
+        submissions_dir = 'submissions'
+        if os.path.isdir(submissions_dir):
+            for fname in os.listdir(submissions_dir):
+                if fname.startswith('tarif_') and fname.endswith('.json'):
+                    try:
+                        fpath = os.path.join(submissions_dir, fname)
+                        with open(fpath, 'r', encoding='utf-8') as f:
+                            row = json.load(f)
+                        rid = row.get('id', '')
+                        if rid:
+                            submitted.add(rid)
+                    except Exception:
+                        pass
+
+    return jsonify(sorted(submitted))
 
 
 def start_app():

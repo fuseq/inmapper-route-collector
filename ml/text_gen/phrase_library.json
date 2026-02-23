@@ -1,0 +1,116 @@
+{
+  "_meta": {
+    "description": "Data-driven phrase library extracted from human route annotations",
+    "slot_types": {
+      "{anchor}": "Raw anchor name (e.g. Shop - ID-153)",
+      "{anchor_abl}": "Anchor + ablative suffix (e.g. Shop - ID-153'dan)",
+      "{anchor_acc}": "Anchor + accusative suffix (e.g. Shop - ID-153'ü)",
+      "{anchor_gen}": "Anchor + genitive suffix (e.g. Shop - ID-153'ün)",
+      "{anchor_dat}": "Anchor + dative suffix (e.g. Shop - ID-153'e)",
+      "{direction}": "Turn direction: sağa / sola",
+      "{side}": "Side reference: sağınızda / solunuzda",
+      "{portal}": "Portal exit ablative: Merdivenden / Asansörden",
+      "{portal_tr}": "Portal type Turkish: merdiven / asansör",
+      "{category}": "Room category: mağaza / restoran / nokta"
+    }
+  },
+
+  "TURN_ANCHOR": [
+    "{anchor_abl} {direction} dönün.",
+    "{anchor_abl} {direction} dönüp ilerleyin.",
+    "{anchor_abl} {direction} dönüp biraz ilerleyin.",
+    "{anchor_abl} {direction} doğru ilerleyin.",
+    "{anchor_abl} {direction} sapın ve ilerleyin.",
+    "{anchor_abl} {direction} dönüp yürümeye devam edin."
+  ],
+
+  "VEER_ANCHOR": [
+    "{anchor_acc} görünce biraz daha ilerleyin.",
+    "{anchor_acc} geçerek devam edin.",
+    "{anchor_acc} geçip düz devam edin.",
+    "{anchor_gen} yanından geçerek ilerleyin.",
+    "{anchor} {side} kalacak şekilde devam edin."
+  ],
+
+  "PASS_BY_ANCHOR": [
+    "{anchor} {side} kalacak şekilde ilerleyin.",
+    "{anchor_gen} yanından ilerleyin.",
+    "{anchor_gen} önünden geçerek devam edin.",
+    "{anchor} yanından sapmadan devam edin.",
+    "{anchor_gen} yanından geçerek ilerlemeye devam edin."
+  ],
+
+  "START_SIDE": [
+    "{anchor} {side} kalacak şekilde ilerleyin.",
+    "{anchor} {side} kalacak şekilde koridor boyunca ilerleyin.",
+    "{anchor} {side} kalacak şekilde düz ilerleyin."
+  ],
+
+  "START_BEHIND": [
+    "{anchor} arkanızda kalacak şekilde ilerleyin.",
+    "{anchor} arkanızda kalacak şekilde karşıya ilerleyin.",
+    "{anchor} arkanızda kalacak şekilde koridorda ilerleyin.",
+    "{anchor} arkanızda kalacak şekilde düz ilerleyin.",
+    "Burayı arkanıza alıp düz ilerleyin."
+  ],
+
+  "START_PORTAL": {
+    "sag": [
+      "{portal} çıkınca sağa doğru ilerleyin.",
+      "{portal} çıkınca sağ koridordan ilerleyin.",
+      "{portal} sağa dönüp ilerlemeye devam edin."
+    ],
+    "sol": [
+      "{portal} çıkınca sola doğru ilerleyin.",
+      "{portal} çıkıp sola doğru ilerleyin.",
+      "{portal} çıkınca sola dönün ve düz ilerleyin."
+    ],
+    "arka": [
+      "{portal} çıkınca arkaya dönüp ilerleyin.",
+      "{portal} çıkınca arkaya doğru ilerleyin.",
+      "{portal} çıkınca arkaya dönün ve yolun sonuna kadar ilerleyin."
+    ],
+    "duz": [
+      "{portal} çıkıp düz ilerleyin.",
+      "{portal} çıkıp koridor boyunca ilerleyin.",
+      "{portal} çıkıp ilerlemeye devam edin."
+    ]
+  },
+
+  "ARRIVE_ANCHOR": [
+    "{anchor_dat} ulaştınız.",
+    "{anchor_acc} göreceksiniz.",
+    "{anchor_acc} karşınızda göreceksiniz.",
+    "{anchor_acc} solunuzda göreceksiniz.",
+    "{anchor_acc} yolun sonunda göreceksiniz.",
+    "{anchor_acc} birkaç mağaza ilerinizde göreceksiniz.",
+    "{anchor} hemen önünüze çıkacak.",
+    "{anchor} karşınıza çıkacak.",
+    "{anchor} yolun sonunda kalacak.",
+    "{anchor} hemen yanınızda bulunuyor.",
+    "{anchor} {side} karşınıza çıkacak."
+  ],
+
+  "ARRIVE_PROXIMITY": [
+    "Hemen yandaki {category}.",
+    "Köşedeki {category}.",
+    "Karşınızdaki {category}."
+  ],
+
+  "NON_ANCHOR_TURN": [
+    "{direction_cap} dönüp ilerleyin.",
+    "{direction_cap} dönün ve devam edin."
+  ],
+
+  "NON_ANCHOR_VEER": [
+    "Hafif {direction} kayarak devam edin.",
+    "Düz ilerleyin.",
+    "Sapmadan düz ilerleyin."
+  ],
+
+  "NON_ANCHOR_PASS_BY": [
+    "Düz ilerleyin.",
+    "Düz devam edin.",
+    "Sapmadan düz ilerleyin."
+  ]
+}

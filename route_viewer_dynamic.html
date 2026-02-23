@@ -274,6 +274,13 @@
             flex-shrink: 0;
         }
 
+        .steps-header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
         .steps-title {
             font-size: 16px;
             font-weight: 700;
@@ -437,6 +444,101 @@
 
         .step-textarea.has-text { border-color: #28a745; }
         .step-textarea::placeholder { color: #bbb; font-size: 13px; }
+
+        /* ─── STEP ACTION BUTTONS ─── */
+        .step-action-btns {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+
+        .step-action-btns button {
+            padding: 5px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            background: white;
+            transition: all 0.2s;
+        }
+
+        .step-action-btns button:hover { background: #f5f5f5; }
+
+        .step-action-btns .btn-keep {
+            color: #28a745;
+            border-color: #28a745;
+        }
+
+        .step-action-btns .btn-keep.active {
+            background: #28a745;
+            color: white;
+        }
+
+        .step-action-btns .btn-delete {
+            color: #dc3545;
+            border-color: #dc3545;
+        }
+
+        .step-action-btns .btn-delete.active {
+            background: #dc3545;
+            color: white;
+        }
+
+        /* ─── USER NAME INPUT ─── */
+        .user-name-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .user-name-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #555;
+            white-space: nowrap;
+        }
+
+        .user-name-input {
+            padding: 8px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            background: white;
+            width: 200px;
+            transition: border-color 0.2s;
+        }
+
+        .user-name-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .user-name-input.saved { border-color: #28a745; }
+
+        /* ─── DUPLICATE CHIP ─── */
+        .duplicate-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .duplicate-chip.exists {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffc107;
+        }
+
+        .duplicate-chip.new-route {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #28a745;
+        }
 
         /* ─── FOOTER ─── */
         .steps-footer {
@@ -696,6 +798,18 @@
                 font-size: 16px;
             }
 
+            .steps-header-top {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+
+            .user-name-input {
+                width: 100%;
+                font-size: 14px;
+                padding: 8px 10px;
+            }
+
             /* Step cards */
             .step-card {
                 padding: 12px;
@@ -787,6 +901,7 @@
                 <span>Distance: <strong id="distInfo">-</strong></span>
                 <span>Turns: <strong id="turnInfo">-</strong></span>
                 <span id="floorChangeInfo" style="display: none;"></span>
+                <span id="duplicateChip"></span>
             </div>
         </div>
 
@@ -827,8 +942,17 @@
             <!-- STEPS -->
             <div class="steps-panel" id="stepsPanel">
                 <div class="steps-header">
-                    <div class="steps-title">Step Descriptions</div>
-                    <div class="steps-subtitle">Write your own description for each step</div>
+                    <div class="steps-header-top">
+                        <div>
+                            <div class="steps-title">Step Descriptions</div>
+                            <div class="steps-subtitle">Enter your name and describe each step</div>
+                        </div>
+                        <div class="user-name-group">
+                            <input type="text" class="user-name-input" id="userNameInput"
+                                   placeholder="Your name..."
+                                   oninput="onUserNameChange(this)">
+                        </div>
+                    </div>
                     <div class="progress-bar">
                         <div class="progress-fill" id="progressFill"></div>
                     </div>
@@ -862,20 +986,49 @@
         let userDescriptions = {};
         let pzInstance = null;
         let currentRoute = { start: '', end: '', floor: '', start_floor: '', end_floor: '' };
-        let floorSvgs = [];       // multi-floor: [{floor, svg}, ...]
-        let currentFloorIdx = 0;  // which floor SVG is currently displayed
+        let floorSvgs = [];
+        let currentFloorIdx = 0;
+        let submittedRoutes = new Set();
 
         // ─── INIT ───
         async function init() {
             try {
-                const resp = await fetch('/api/rooms');
-                allRooms = await resp.json();
+                // Load user name from localStorage
+                const savedName = localStorage.getItem('collector_user_name') || '';
+                const nameInput = document.getElementById('userNameInput');
+                nameInput.value = savedName;
+                if (savedName) nameInput.classList.add('saved');
+
+                const [roomsResp, routesResp] = await Promise.all([
+                    fetch('/api/rooms'),
+                    fetch('/api/submitted-routes'),
+                ]);
+                allRooms = await roomsResp.json();
+
+                try {
+                    const routes = await routesResp.json();
+                    submittedRoutes = new Set(routes);
+                } catch (e) {
+                    console.warn('Could not load submitted routes:', e);
+                }
+
                 populateFloorSelects();
                 onStartFloorChange();
                 onEndFloorChange();
             } catch (e) {
                 console.error('Failed to load rooms:', e);
             }
+        }
+
+        function onUserNameChange(el) {
+            const name = el.value.trim();
+            localStorage.setItem('collector_user_name', name);
+            if (name) {
+                el.classList.add('saved');
+            } else {
+                el.classList.remove('saved');
+            }
+            updateProgress();
         }
 
         function populateFloorSelects() {
@@ -1043,7 +1196,10 @@
                     floorChangeEl.style.display = 'none';
                 }
 
-                showToast('Route calculated ✓', 'success');
+                // Duplicate check
+                updateDuplicateChip();
+
+                showToast('Route calculated', 'success');
 
                 // Mobile: auto-switch to steps tab
                 autoSwitchToStepsIfMobile();
@@ -1202,6 +1358,10 @@
                     altLine = `\n   Alt: ${altLandmarks.join(' | ')}`;
                 }
 
+                const isKeep = savedText === '+';
+                const isDelete = savedText === '-';
+                const hasCustom = savedText && !isKeep && !isDelete;
+
                 html += `
                 <div class="step-card${filledClass}" id="card-${step.step_number}">
                     <div class="step-card-header">
@@ -1214,13 +1374,19 @@
                     <div class="step-system-label">System</div>
                     <div class="step-system-desc">${fullSystemLine}${altLine}</div>
                     <div class="step-input-label">Your Description</div>
+                    <div class="step-action-btns">
+                        <button class="btn-keep${isKeep ? ' active' : ''}"
+                                onclick="setStepAction(${step.step_number}, '+')">+ Keep</button>
+                        <button class="btn-delete${isDelete ? ' active' : ''}"
+                                onclick="setStepAction(${step.step_number}, '-')">− Delete</button>
+                    </div>
                     <textarea 
                         class="step-textarea${textClass}" 
                         id="input-${step.step_number}" 
                         data-step="${step.step_number}"
-                        placeholder="Write your description for this step..."
+                        placeholder="Custom description or use buttons above..."
                         oninput="onStepInput(this)"
-                    >${savedText}</textarea>
+                    >${hasCustom ? savedText : ''}</textarea>
                 </div>`;
             });
 
@@ -1229,10 +1395,50 @@
             updateProgress();
         }
 
+        function setStepAction(stepNum, action) {
+            const current = userDescriptions[stepNum];
+            if (current === action) {
+                userDescriptions[stepNum] = '';
+            } else {
+                userDescriptions[stepNum] = action;
+            }
+
+            const textarea = document.getElementById('input-' + stepNum);
+            if (textarea) {
+                if (userDescriptions[stepNum] === '+' || userDescriptions[stepNum] === '-') {
+                    textarea.value = '';
+                }
+            }
+
+            const card = document.getElementById('card-' + stepNum);
+            const keepBtn = card.querySelector('.btn-keep');
+            const delBtn = card.querySelector('.btn-delete');
+
+            keepBtn.classList.toggle('active', userDescriptions[stepNum] === '+');
+            delBtn.classList.toggle('active', userDescriptions[stepNum] === '-');
+
+            if (userDescriptions[stepNum]) {
+                card.classList.add('filled');
+            } else {
+                card.classList.remove('filled');
+            }
+            updateProgress();
+        }
+
         function onStepInput(el) {
             const stepNum = parseInt(el.dataset.step);
             const text = el.value.trim();
-            userDescriptions[stepNum] = el.value;
+
+            if (text) {
+                userDescriptions[stepNum] = el.value;
+                const card = document.getElementById('card-' + stepNum);
+                const keepBtn = card.querySelector('.btn-keep');
+                const delBtn = card.querySelector('.btn-delete');
+                keepBtn.classList.remove('active');
+                delBtn.classList.remove('active');
+            } else {
+                userDescriptions[stepNum] = '';
+            }
 
             const card = document.getElementById('card-' + stepNum);
             if (text) {
@@ -1248,14 +1454,17 @@
         function updateProgress() {
             let filled = 0;
             currentSteps.forEach(step => {
-                if ((userDescriptions[step.step_number] || '').trim()) filled++;
+                const val = (userDescriptions[step.step_number] || '').trim();
+                if (val) filled++;
             });
 
             document.getElementById('filledCount').textContent = filled;
             const total = currentSteps.length;
             const pct = total > 0 ? (filled / total) * 100 : 0;
             document.getElementById('progressFill').style.width = pct + '%';
-            document.getElementById('submitBtn').disabled = (filled < total || total === 0);
+
+            const userName = (document.getElementById('userNameInput').value || '').trim();
+            document.getElementById('submitBtn').disabled = (filled < total || total === 0 || !userName);
         }
 
         // ─── SUBMIT ───
@@ -1264,8 +1473,17 @@
             btn.disabled = true;
             btn.textContent = 'Sending...';
 
+            const userName = (document.getElementById('userNameInput').value || '').trim();
+            if (!userName) {
+                showToast('Please enter your name first', 'error');
+                btn.textContent = 'Submit';
+                updateProgress();
+                return;
+            }
+
             const result = {
                 venue: 'zorlu',
+                submitted_by: userName,
                 start_room: currentRoute.start,
                 end_room: currentRoute.end,
                 floor: currentRoute.floor,
@@ -1292,10 +1510,11 @@
                 const data = await resp.json();
 
                 if (resp.ok) {
-                    showToast('Descriptions submitted successfully', 'success');
-                    // Reset form
+                    showToast('Submitted successfully', 'success');
+                    submittedRoutes.add(getRouteId());
+                    updateDuplicateChip();
                     userDescriptions = {};
-                    document.querySelectorAll('.desc-textarea').forEach(ta => ta.value = '');
+                    renderSteps();
                     updateProgress();
                 } else {
                     showToast('Error: ' + (data.error || 'Unknown error'), 'error');
@@ -1305,6 +1524,27 @@
             } finally {
                 btn.textContent = 'Submit';
                 updateProgress();
+            }
+        }
+
+        // ─── DUPLICATE CHECK ───
+        function getRouteId() {
+            const s = currentRoute.start.replace(/ - /g, '_').replace(/ /g, '_');
+            const e = currentRoute.end.replace(/ - /g, '_').replace(/ /g, '_');
+            return `${currentRoute.start_floor}_${s}_to_${currentRoute.end_floor}_${e}`;
+        }
+
+        function updateDuplicateChip() {
+            const chip = document.getElementById('duplicateChip');
+            if (!currentRoute.start || !currentRoute.end) {
+                chip.innerHTML = '';
+                return;
+            }
+            const routeId = getRouteId();
+            if (submittedRoutes.has(routeId)) {
+                chip.innerHTML = '<span class="duplicate-chip exists">Already submitted</span>';
+            } else {
+                chip.innerHTML = '<span class="duplicate-chip new-route">New route</span>';
             }
         }
 

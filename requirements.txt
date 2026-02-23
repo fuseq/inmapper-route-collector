@@ -1,7 +1,14 @@
 Flask==3.1.2
 flask-cors==6.0.2
 gunicorn==23.0.0
-openpyxl==3.1.5
 
+# ML dependencies
+torch>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.3.0
 
+# Text generation dependencies
+transformers>=4.35.0
+sentencepiece>=0.1.99
+sacrebleu>=2.3.0
 

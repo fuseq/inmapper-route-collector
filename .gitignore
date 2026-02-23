@@ -53,3 +53,10 @@ check_*.py
 turn_code.py
 main.py
 BATCH_ROUTES_README.md
+
+# ML model checkpoints & cache (large binary files)
+ml/checkpoints/
+*.ipynb_checkpoints/
+
+# Submissions (local data)
+submissions/

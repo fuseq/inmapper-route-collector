@@ -285,7 +285,19 @@ def combine_segments(segments: List[Dict],
                 step['step_number'] = step_number
                 all_steps.append(step)
                 step_number += 1
-    
+
+    # Portal varış/çıkış adımlarını yeniden adlandır
+    for i, step in enumerate(all_steps):
+        if (step.get('action') == 'ARRIVE'
+                and i + 1 < len(all_steps)
+                and all_steps[i + 1].get('action') == 'FLOOR_CHANGE'):
+            step['action'] = 'ARRIVE_PORTAL'
+        elif (step.get('action') == 'START'
+              and i - 1 >= 0
+              and all_steps[i - 1].get('action') == 'FLOOR_CHANGE'):
+            step['action'] = 'START_PORTAL'
+            step['portal_type'] = all_steps[i - 1].get('portal_type', '')
+
     # Tüm path_points ve turns'leri birleştir
     all_path_points = []
     all_turns = []
