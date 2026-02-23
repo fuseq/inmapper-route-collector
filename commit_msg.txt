@@ -1,0 +1,8 @@
+Add ML pipeline and route collection UI improvements
+
+- Add full ML pipeline: step filter, anchor selection, description strategy, phrase library, and template-based text generation
+- Route collector: add user name field with localStorage persistence
+- Route collector: add keep/delete buttons for step annotations
+- Route collector: add duplicate route detection chip via Google Sheets
+- Backend: add /api/submitted-routes endpoint with Sheets integration
+- Update .gitignore for checkpoints and submissions
