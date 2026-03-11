@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>inMapper GeoJSON Viewer</title>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+  body { margin: 0; padding: 0; }
+  #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+  #info {
+    position: absolute; top: 10px; left: 10px; z-index: 1;
+    background: rgba(255,255,255,0.92); padding: 12px 16px;
+    border-radius: 8px; font-family: 'Segoe UI', sans-serif; font-size: 13px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+    max-width: 220px;
+  }
+  #info h3 { margin: 0 0 8px; font-size: 15px; color: #333; }
+  .layer-toggle { display: flex; align-items: center; cursor: pointer; margin: 3px 0; }
+  .layer-toggle input { margin-right: 8px; accent-color: #4a90d9; }
+  .separator { border-top: 1px solid #e0e0e0; margin: 8px 0; }
+  .slider-group { margin: 4px 0; }
+  .slider-group label { font-size: 12px; color: #666; display: block; margin-bottom: 2px; }
+  .slider-group input[type=range] { width: 100%; }
+  #hover-info { margin-top: 8px; color: #555; min-height: 18px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="info">
+  <h3>inMapper GeoJSON</h3>
+  <div id="layers"></div>
+  <div class="separator"></div>
+  <div class="slider-group">
+    <label>Pitch: <span id="pitch-val">60</span>&deg;</label>
+    <input type="range" id="pitch-slider" min="0" max="85" value="60">
+  </div>
+  <div class="slider-group">
+    <label>Height scale: <span id="height-val">1.0</span>x</label>
+    <input type="range" id="height-slider" min="0" max="30" value="10" step="1">
+  </div>
+  <div id="hover-info"></div>
+</div>
+<script>
+const GEOJSON_URL = 'airport.geojson';
+
+const SUBLAYER_COLORS = {"walking": "#f5f5f5", "building": "#e6e6e6", "stand": "#d9d3d2", "service": "#e9dad0", "food": "#d1bbbc", "water": "#cfe2f3", "other": "#e9dad0", "shop": "#d9d3d2", "green": "#a8d08d", "medical": "#ff9999", "commercial": "#ffe0b2", "social": "#c5cae9", "structure": "#d0d0d0"};
+const SUBLAYER_HEIGHTS = {"walking": 0, "building": 0, "stand": 8, "service": 6, "food": 6, "water": 0.5, "other": 5, "shop": 8, "green": 1, "medical": 6, "commercial": 7, "social": 5, "structure": 3};
+
+let heightScale = 1.0;
+let roomData = null;
+
+const map = new maplibregl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    sources: {},
+    layers: [{
+      id: 'background',
+      type: 'background',
+      paint: { 'background-color': '#f0f0f0' }
+    }],
+    light: {
+      anchor: 'viewport',
+      color: '#ffffff',
+      intensity: 0.4,
+      position: [1.5, 180, 30]
+    }
+  },
+  center: [0.0, 0.0],
+  zoom: 16,
+  pitch: 60,
+  bearing: -20,
+  maxZoom: 24,
+  antialias: true,
+});
+
+map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
+
+document.getElementById('pitch-slider').addEventListener('input', function() {
+  map.setPitch(Number(this.value));
+  document.getElementById('pitch-val').textContent = this.value;
+});
+
+document.getElementById('height-slider').addEventListener('input', function() {
+  heightScale = Number(this.value) / 10;
+  document.getElementById('height-val').textContent = heightScale.toFixed(1);
+  updateExtrusionHeights();
+});
+
+function updateExtrusionHeights() {
+  if (!map.getLayer('rooms-3d')) return;
+  const expr = ['match', ['get', 'sublayer']];
+  for (const [sl, h] of Object.entries(SUBLAYER_HEIGHTS)) {
+    expr.push(sl, h * heightScale);
+  }
+  expr.push(4 * heightScale);
+  map.setPaintProperty('rooms-3d', 'fill-extrusion-height', expr);
+}
+
+map.on('load', async () => {
+  const resp = await fetch(GEOJSON_URL);
+  const data = await resp.json();
+
+  const layerNames = ['rooms', 'paths', 'doors', 'portals', 'writing', 'icons', 'constants'];
+  const layerData = {};
+  layerNames.forEach(l => {
+    layerData[l] = {
+      type: 'FeatureCollection',
+      features: data.features.filter(f => f.properties.layer === l)
+    };
+  });
+  roomData = layerData['rooms'];
+
+  layerNames.forEach(l => {
+    map.addSource(l, { type: 'geojson', data: layerData[l] });
+  });
+
+  // Flat base layers: Walking + Building (no extrusion)
+  const flatSublayers = ['walking', 'building'];
+  map.addSource('rooms-flat', {
+    type: 'geojson',
+    data: {
+      type: 'FeatureCollection',
+      features: roomData.features.filter(f => flatSublayers.includes(f.properties.sublayer))
+    }
+  });
+  map.addLayer({
+    id: 'rooms-floor',
+    type: 'fill',
+    source: 'rooms-flat',
+    paint: {
+      'fill-color': ["match", ["get", "sublayer"], "walking", "#f5f5f5", "building", "#e6e6e6", "stand", "#d9d3d2", "service", "#e9dad0", "food", "#d1bbbc", "water", "#cfe2f3", "other", "#e9dad0", "shop", "#d9d3d2", "green", "#a8d08d", "medical", "#ff9999", "commercial", "#ffe0b2", "social", "#c5cae9", "structure", "#d0d0d0", "#cccccc"],
+      'fill-opacity': 0.9,
+    }
+  });
+
+  // 3D room extrusions (only units: shops, food, service, etc.)
+  map.addLayer({
+    id: 'rooms-3d',
+    type: 'fill-extrusion',
+    source: 'rooms',
+    filter: ['all',
+      ['!=', ['get', 'sublayer'], 'walking'],
+      ['!=', ['get', 'sublayer'], 'building']
+    ],
+    paint: {
+      'fill-extrusion-color': ["match", ["get", "sublayer"], "walking", "#f5f5f5", "building", "#e6e6e6", "stand", "#d9d3d2", "service", "#e9dad0", "food", "#d1bbbc", "water", "#cfe2f3", "other", "#e9dad0", "shop", "#d9d3d2", "green", "#a8d08d", "medical", "#ff9999", "commercial", "#ffe0b2", "social", "#c5cae9", "structure", "#d0d0d0", "#cccccc"],
+      'fill-extrusion-height': ["match", ["get", "sublayer"], "walking", 0, "building", 0, "stand", 8, "service", 6, "food", 6, "water", 0.5, "other", 5, "shop", 8, "green", 1, "medical", 6, "commercial", 7, "social", 5, "structure", 3, 4],
+      'fill-extrusion-base': 0,
+      'fill-extrusion-opacity': 0.88,
+    }
+  });
+
+  // Room outlines
+  map.addLayer({
+    id: 'rooms-outline',
+    type: 'line',
+    source: 'rooms',
+    paint: {
+      'line-color': '#888888',
+      'line-width': 1,
+    }
+  });
+
+  // Paths
+  map.addLayer({
+    id: 'paths-line',
+    type: 'line',
+    source: 'paths',
+    paint: {
+      'line-color': '#3fab35',
+      'line-width': 1.5,
+    },
+    layout: { visibility: 'none' }
+  });
+
+  // Doors
+  map.addLayer({
+    id: 'doors-line',
+    type: 'line',
+    source: 'doors',
+    paint: {
+      'line-color': '#ff0000',
+      'line-width': 1.5,
+    },
+    layout: { visibility: 'none' }
+  });
+
+  // Portals
+  map.addLayer({
+    id: 'portals-line',
+    type: 'line',
+    source: 'portals',
+    paint: {
+      'line-color': '#0000ff',
+      'line-width': 2,
+    },
+    layout: { visibility: 'none' }
+  });
+
+  // Writing labels
+  map.addLayer({
+    id: 'writing-labels',
+    type: 'symbol',
+    source: 'writing',
+    layout: {
+      'text-field': ['get', 'text'],
+      'text-size': 10,
+      'text-anchor': 'center',
+      'text-allow-overlap': true,
+    },
+    paint: {
+      'text-color': '#3f3a38',
+      'text-halo-color': '#ffffff',
+      'text-halo-width': 1,
+    }
+  });
+
+  // Icons
+  map.addLayer({
+    id: 'icons-circle',
+    type: 'circle',
+    source: 'icons',
+    paint: {
+      'circle-radius': 5,
+      'circle-color': '#2196F3',
+      'circle-stroke-width': 1.5,
+      'circle-stroke-color': '#fff',
+    }
+  });
+
+  // Constants
+  map.addLayer({
+    id: 'constants-circle',
+    type: 'circle',
+    source: 'constants',
+    paint: {
+      'circle-radius': 6,
+      'circle-color': '#FF9800',
+      'circle-stroke-width': 1.5,
+      'circle-stroke-color': '#fff',
+    }
+  });
+
+  // Layer toggles
+  const toggles = [
+    { name: 'Rooms (3D)', layers: ['rooms-3d', 'rooms-outline', 'rooms-floor'], checked: true },
+    { name: 'Paths', layers: ['paths-line'], checked: false },
+    { name: 'Doors', layers: ['doors-line'], checked: false },
+    { name: 'Portals', layers: ['portals-line'], checked: false },
+    { name: 'Writing', layers: ['writing-labels'], checked: true },
+    { name: 'Icons', layers: ['icons-circle'], checked: true },
+    { name: 'Constants', layers: ['constants-circle'], checked: true },
+  ];
+
+  const layersDiv = document.getElementById('layers');
+  toggles.forEach(t => {
+    const label = document.createElement('label');
+    label.className = 'layer-toggle';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = t.checked;
+    cb.onchange = () => {
+      const vis = cb.checked ? 'visible' : 'none';
+      t.layers.forEach(lid => {
+        if (map.getLayer(lid)) map.setLayoutProperty(lid, 'visibility', vis);
+      });
+    };
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(t.name));
+    label.appendChild(document.createElement('br'));
+    layersDiv.appendChild(label);
+  });
+
+  // Hover info
+  const hoverInfo = document.getElementById('hover-info');
+  map.on('mousemove', 'rooms-3d', e => {
+    if (e.features.length) {
+      const p = e.features[0].properties;
+      hoverInfo.innerHTML = '<b>' + (p.id || '') + '</b><br><span style="color:#888">' + (p.sublayer || '') + '</span>';
+      map.getCanvas().style.cursor = 'pointer';
+    }
+  });
+  map.on('mouseleave', 'rooms-3d', () => {
+    hoverInfo.innerHTML = '';
+    map.getCanvas().style.cursor = '';
+  });
+
+  // Fit to bounds
+  const bounds = new maplibregl.LngLatBounds();
+  data.features.forEach(f => {
+    const geom = f.geometry;
+    if (geom.type === 'Point') bounds.extend(geom.coordinates);
+    else if (geom.type === 'LineString') geom.coordinates.forEach(c => bounds.extend(c));
+    else if (geom.type === 'Polygon') geom.coordinates[0].forEach(c => bounds.extend(c));
+  });
+  map.fitBounds(bounds, { padding: 40, pitch: 60, bearing: -20 });
+});
+</script>
+</body>
+</html>
